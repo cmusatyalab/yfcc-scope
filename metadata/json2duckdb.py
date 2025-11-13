@@ -88,6 +88,14 @@ con.sql(
 )
 con.sql("DROP TABLE expanded_tags")
 
+## Ignoring the machine_tags for now.
+## The idea is nice, but the use seems to be not standardized and inconsistent.
+## lots of images actually placed the tags in the description so they were not
+## picked up as separate machine_tags, the namespace:key values are somewhat
+## consistent but I still see various inconsistencies like geo:lon, geo:long,
+## and geo:longitude and the values are all over the place. Not sure how to
+## effectively use these for scoping.
+
 ## This takes 4 minutes to save 7MB (in a 17GB database)
 # print("# Creating 'license' enum")
 # con.sql(f"CREATE TYPE license AS ENUM (SELECT license_id FROM read_ndjson({settings.json_file}))")
@@ -109,7 +117,6 @@ con.sql(
         camera_model: "VARCHAR",
         caption: "VARCHAR",
         description: "VARCHAR",
-        upload_app: "VARCHAR",
         gps_coords: "POINT_2D",
         license_id: "VARCHAR",
    });"""

@@ -63,8 +63,8 @@ METADATA_COLUMNS = [
     "camera_model",  # VARCHAR  # spaces are replaced with '+', urlencoded?
     "caption",  # VARCHAR  # spaces are replaced with '+', urlencoded?
     "description",  # VARCHAR  # spaces are replaced with '+', urlencoded?
-    "tags",  # VARCHAR  # comma separated, spaces are replaced with '+', urlencoded? map to table of tags?
-    "upload_app",  # VARCHAR  # application that uploaded the image (urlencoded) (NULL = '')
+    "tags",  # VARCHAR[]  # comma separated, spaces are replaced with '+', urlencoded? map to table of tags?
+    "machine_tags",  # VARCHAR[]  # comma separated, namespace:tag=value
     "latitude",  # DOUBLE
     "longitude",  # DOUBLE
     "gps_satellites",  # UTINYINT  # only exists when there are GPS coordinates, number varies between 1 and 16
@@ -97,8 +97,8 @@ class ImageMeta(BaseModel):
     camera_model: str | None = None
     caption: str | None = None
     description: str | None = None
-    upload_app: str | None = None
     tags: list[str] = []
+    machine_tags: list[str] = []
     gps_coords: (
         Annotated[
             Coordinate,
@@ -121,7 +121,7 @@ class ImageMeta(BaseModel):
             caption=unquote_plus(fields[8]) if fields[8] else None,
             description=unquote_plus(fields[9]) if fields[9] else None,
             tags=[unquote_plus(tag) for tag in fields[10].split(",") if tag],
-            upload_app=unquote_plus(fields[11]) if fields[11] else None,
+            machine_tags=[unquote_plus(tag) for tag in fields[11].split(",") if tag],
             gps_coords=Coordinate(float(fields[12]), float(fields[13]))
             if fields[14]
             else None,
