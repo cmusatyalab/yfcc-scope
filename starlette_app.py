@@ -8,6 +8,7 @@ from io import BytesIO
 import psycopg2, hashlib, colorsys, html
 import os, time, json, logging, math
 from string import Template
+import requests
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -27,7 +28,7 @@ def open_conn():
         port=int(os.environ.get("DB_PORT", 5432)),
     )
 
-def fetch(image_id: str):
+def fetch(image_file_id: str):
     """
     Return (path, rows) where rows are:
       (bounding_box_number, label, center_x, center_y, width, height, confidence_score)
@@ -46,20 +47,20 @@ def fetch(image_id: str):
                    b.confidence_score
             FROM yfcc_index y
             LEFT JOIN bb_table b
-              ON y.image_id = b.image_id
-            WHERE y.image_id = %s
+              ON y.image_file_id = b.image_file_id
+            WHERE y.image_file_id = %s
             ORDER BY COALESCE(b.bounding_box_number, 0)
             """,
-            (image_id,)
+            (image_file_id,)
         )
         rows = cur.fetchall()
         cur.close(); conn.close()
     except Exception as e:
-        log.error("DB fetch failed for image_id=%r: %s", image_id, e)
+        log.error("DB fetch failed for image_file_id=%r: %s", image_file_id, e)
         return (None, [])
 
     if not rows:
-        log.warning("image_id %r not found in yfcc_index", image_id)
+        log.warning("image_file_id %r not found in yfcc_index", image_file_id)
         return (None, [])
 
     path = rows[0][0]
@@ -162,11 +163,11 @@ def rebuild_histograms():
         cur.execute("""
             WITH maxbin AS (
                 SELECT
-                    image_id,
+                    image_file_id,
                     GREATEST(0, LEAST(100, FLOOR(MAX(confidence_score) * 100.0 + 0.000001)))::SMALLINT AS max_bin
                 FROM bb_table
                 WHERE confidence_score IS NOT NULL
-                GROUP BY image_id
+                GROUP BY image_file_id
             )
             INSERT INTO yfcc_images_maxbin_hist (max_bin, image_count, updated_at)
             SELECT max_bin, COUNT(*)::BIGINT, %s
@@ -265,7 +266,7 @@ HTML_TEMPLATE = Template("""
 <body>
   <form id="ctrl_form" method="GET" action="/">
     <div class="row toolbar">
-      <input name="image_id" value="$qsafe" placeholder="1234567890" />
+      <input name="image_file_id" value="$qsafe" placeholder="1234567890" />
       <button type="submit">Show</button>
       <span class="muted">Tip: turn “Select all” off to pick specific labels.</span>
     </div>
@@ -374,7 +375,7 @@ def render_checkboxes(selected: set[str], all_checked: bool):
 # -----------------------------------------------------------------------------
 async def home(request: Request):
     qp = request.query_params
-    image_id = qp.get("image_id", "")
+    image_file_id = qp.get("image_file_id", "")
     selected = set(qp.getlist("label"))
     all_checked = (qp.get("select_all", "1") == "1")
 
@@ -384,16 +385,16 @@ async def home(request: Request):
         min_conf = 0.4
     min_conf = max(0.0, min(1.0, round(min_conf, 2)))
 
-    img_params = [f"image_id={image_id}",
+    img_params = [f"image_file_id={image_file_id}",
                   f"select_all={'1' if all_checked else '0'}",
                   f"min_conf={min_conf:.2f}"]
     if not all_checked:
         img_params += [f"label={lab}" for lab in selected]
-    img_src = "/image?" + "&".join(img_params) if image_id else ""
+    img_src = "/image?" + "&".join(img_params) if image_file_id else ""
     img_tag = f"<img style='max-width:95%; border:1px solid #eee;' src='{img_src}'/>" if img_src else ""
 
     html_str = HTML_TEMPLATE.safe_substitute(
-        qsafe=html.escape(image_id),
+        qsafe=html.escape(image_file_id),
         all_checked_attr=("checked" if all_checked else ""),
         select_all_val=('1' if all_checked else '0'),
         min_conf=f"{min_conf:.2f}",
@@ -405,7 +406,7 @@ async def home(request: Request):
 
 async def image(request: Request):
     qp = request.query_params
-    image_id = qp.get("image_id", "")
+    image_file_id = qp.get("image_file_id", "")
     all_checked = (qp.get("select_all", "1") == "1")
     selected = set(qp.getlist("label"))
 
@@ -415,23 +416,20 @@ async def image(request: Request):
         min_conf = 0.4
     min_conf = max(0.0, min(1.0, round(min_conf, 2)))
 
-    path, rows = fetch(image_id)
+    path, rows = fetch(image_file_id)
     if not path:
-        msg = f"not found (image_id={image_id})"
+        msg = f"not found (image_file_id={image_file_id})"
         log.warning(msg)
         return HTMLResponse(msg, status_code=404)
 
-    if not os.path.exists(path):
-        msg = f"image file missing on disk: {path} (image_id={image_id})"
-        log.error(msg)
-        return HTMLResponse(msg, status_code=404)
-
     try:
-        img = Image.open(path).convert("RGB")
+        resp = requests.get(path, timeout=10, stream=True)
+        resp.raise_for_status()
+        img = Image.open(BytesIO(resp.content)).convert("RGB")
     except Exception as e:
-        msg = f"failed to open image: {path} (image_id={image_id}) err={e}"
+        msg = f"failed to fetch/open image: {path} (image_file_id={image_file_id}) err={e}"
         log.error(msg)
-        return HTMLResponse(msg, status_code=500)
+        return HTMLResponse(msg, status_code=502)
 
     W, H = img.size
     d = ImageDraw.Draw(img)
@@ -453,8 +451,8 @@ async def image(request: Request):
         drawn += 1
 
     if drawn == 0:
-        log.info("No boxes drawn for image_id=%r at min_conf=%.2f (labels filter size=%d, all=%s)",
-                 image_id, min_conf, len(selected), all_checked)
+        log.info("No boxes drawn for image_file_id=%r at min_conf=%.2f (labels filter size=%d, all=%s)",
+                 image_file_id, min_conf, len(selected), all_checked)
 
     buf = BytesIO(); img.save(buf, "PNG"); buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
