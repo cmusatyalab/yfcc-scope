@@ -268,7 +268,7 @@ print("ver feb9")
 # -------------------------
 
 BASE_TEMPLATE = "https://storage.cmusatyalab.org/yfcc100m/yfcc100m-{shard:06d}.tar"
-START_SHARD = 0
+START_SHARD = 1
 MAX_SHARDS = 403  # 000000..000402 inclusive
 
 processed = 0
@@ -277,6 +277,7 @@ start_time = time.time()
 print(f"Starting processing from shard {START_SHARD:06d}")
 
 for shard in range(START_SHARD, MAX_SHARDS):
+    processed_in_this_shard = 0
     shard_url = BASE_TEMPLATE.format(shard=shard)
     print(f"\n--- Processing shard {shard:06d}: {shard_url} ---")
 
@@ -320,7 +321,7 @@ for shard in range(START_SHARD, MAX_SHARDS):
     # -------------------------
     # Process the shard (same as your original)
     # -------------------------
-    print("starting to process shard"
+    print("starting to process shard")
     for image_file_id, s in id_to_sample.items():
         key = s.get("__key__", "?")
         try:
@@ -353,6 +354,7 @@ for shard in range(START_SHARD, MAX_SHARDS):
                 )
 
             processed += 1
+            processed_in_this_shard += 1
             if processed % 100 == 0:
                 print(f"done processing {processed} images")
             
@@ -373,11 +375,11 @@ for shard in range(START_SHARD, MAX_SHARDS):
     print(
     f"✅ Shard {shard:06d} committed | "
     f"raw={len(batch_samples)} | "
-    f"processed={shard_processed} | "
+    f"processed_in_this_shard={processed_in_this_shard} | "
     f"shard time {format_seconds(shard_elapsed)} | "
     f"total {processed} images | "
     f"{imgs_per_sec:.2f} img/s"
-)
+    )
 
 elapsed = time.time() - start_time
 print(f"✅ Finished! Processed {processed} images in {format_seconds(elapsed)}")
