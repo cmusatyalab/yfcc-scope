@@ -458,6 +458,7 @@ async def image(request: Request):
     buf = BytesIO(); img.save(buf, "PNG"); buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
 
+
 # -----------------------------------------------------------------------------
 # Client JS (uses histogram-backed /freqs; Recalc rebuilds hist)
 # -----------------------------------------------------------------------------
@@ -620,8 +621,10 @@ def parse_conf_ranges_0_100(conf_str: str):
     """
     Accepts:
       "40-45,50,90-100"
-    Returns list of (lo, hi) in *0..1* scale:
-      [(0.40,0.45),(0.50,0.50),(0.90,1.00)]
+    Returns list of (lo, hi) in *0..1* scale, where hi is EXCLUSIVE:
+      "50"      -> (0.50, 0.51)
+      "40-45"   -> (0.40, 0.46)   # includes 40..45 bins
+      "90-100"  -> (0.90, 1.01) clamped to 1.0 -> (0.90, 1.0)
     """
     if not conf_str:
         return None
@@ -631,20 +634,29 @@ def parse_conf_ranges_0_100(conf_str: str):
         part = part.strip()
         if not part:
             continue
+
         if "-" in part:
             lo_s, hi_s = part.split("-", 1)
-            lo = float(lo_s) / 100.0
-            hi = float(hi_s) / 100.0
+            lo_bin = int(lo_s)
+            hi_bin = int(hi_s)
         else:
-            lo = hi = float(part) / 100.0
+            lo_bin = hi_bin = int(part)
 
-        lo = max(0.0, min(1.0, lo))
-        hi = max(0.0, min(1.0, hi))
-        if lo > hi:
-            lo, hi = hi, lo
+        # normalize / clamp
+        lo_bin = max(0, min(100, lo_bin))
+        hi_bin = max(0, min(100, hi_bin))
+        if lo_bin > hi_bin:
+            lo_bin, hi_bin = hi_bin, lo_bin
+
+        lo = lo_bin / 100.0
+        hi = (hi_bin + 1) / 100.0  # EXCLUSIVE upper bound
+        if hi > 1.0:
+            hi = 1.0
+
         ranges.append((lo, hi))
 
     return ranges if ranges else None
+
 
 
 def build_conf_sql(conf_ranges):
@@ -675,7 +687,7 @@ def fetch_images_for_labels(labels, limit, offset, conf_ranges=None):
         # conf_ranges like [(0.4,0.45),(0.5,0.5),(0.9,1.0)]
         ors = []
         for lo, hi in conf_ranges:
-            ors.append("(b.confidence_score BETWEEN %s AND %s)")
+            ors.append("(b.confidence_score >= %s AND b.confidence_score < %s)")
             params += [lo, hi]
         conf_sql = " AND (" + " OR ".join(ors) + ")"
 
@@ -746,7 +758,38 @@ async def images_api(request: Request):
     })
 
 
+def conf_hist(request):
+    labels = request.query_params.getlist("label")
+    if not labels:
+        return JSONResponse({"error": "need ?label=cat&label=dog"}, status_code=400)
 
+    sql = """
+    WITH x AS (
+      SELECT
+        image_file_id,
+        FLOOR(confidence_score * 100)::int AS bin,
+        COUNT(DISTINCT label) AS labels_hit
+      FROM bb_table
+      WHERE confidence_score IS NOT NULL
+        AND label = ANY(%s)
+      GROUP BY image_file_id, FLOOR(confidence_score * 100)::int
+    )
+    SELECT bin, COUNT(*) AS image_count
+    FROM x
+    WHERE labels_hit = %s
+    GROUP BY bin
+    ORDER BY bin;
+    """
+
+    with open_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (labels, len(labels)))
+            rows = cur.fetchall()
+
+    # always return 0..100 so the UI is easy
+    counts = {b: c for (b, c) in rows if 0 <= b <= 100}
+    bins = [{"bin": i, "image_count": int(counts.get(i, 0))} for i in range(101)]
+    return JSONResponse({"labels": labels, "bins": bins})
 # -----------------------------------------------------------------------------
 # Starlette app
 # -----------------------------------------------------------------------------
@@ -754,6 +797,7 @@ app = Starlette(routes=[
     Route("/", home),
     Route("/image", image),
     Route("/api/images", images_api),
+    Route("/api/conf_hist", conf_hist, methods=["GET"]),
     Route("/freqs", freqs_api),
     Route("/recalc", recalc_freqs, methods=["POST"]),
     Route("/freqs.js", freqs_client_js),
