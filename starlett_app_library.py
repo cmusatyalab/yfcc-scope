@@ -1,21 +1,32 @@
-# starlette_app.py
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, StreamingResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Route
 from starlette.requests import Request
+from starlette.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
+
 from PIL import Image, ImageDraw
 from io import BytesIO
-import psycopg2, hashlib, colorsys, html
-import os, time, json, logging, math, re
 from string import Template
-from starlette.middleware.cors import CORSMiddleware
+
+import psycopg2
+import hashlib
+import colorsys
+import html
+import os
+import time
+import json
+import logging
+import re
 import requests
+
 
 # -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger("yfcc")
+
 
 # -----------------------------------------------------------------------------
 # DB
@@ -29,9 +40,11 @@ def open_conn():
         port=int(os.environ.get("DB_PORT", 5432)),
     )
 
+
 def fetch(image_file_id: str):
     try:
-        conn = open_conn(); cur = conn.cursor()
+        conn = open_conn()
+        cur = conn.cursor()
         cur.execute(
             """
             SELECT y.path,
@@ -48,10 +61,11 @@ def fetch(image_file_id: str):
             WHERE y.image_file_id = %s
             ORDER BY COALESCE(b.bounding_box_number, 0)
             """,
-            (image_file_id,)
+            (image_file_id,),
         )
         rows = cur.fetchall()
-        cur.close(); conn.close()
+        cur.close()
+        conn.close()
     except Exception as e:
         log.error("DB fetch failed for image_file_id=%r: %s", image_file_id, e)
         return (None, [])
@@ -61,30 +75,37 @@ def fetch(image_file_id: str):
         return (None, [])
 
     path = rows[0][0]
-    cleaned = [ (n, label, cx, cy, w, h, conf)
-               for _, n, label, cx, cy, w, h, conf in rows
-               if label is not None ]
+    cleaned = [
+        (n, label, cx, cy, w, h, conf)
+        for _, n, label, cx, cy, w, h, conf in rows
+        if label is not None
+    ]
     return (path, cleaned)
+
 
 # -----------------------------------------------------------------------------
 # Labels + Colors
 # -----------------------------------------------------------------------------
-LABELS = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat',
-          'traffic_light','fire_hydrant','stop_sign','parking_meter','bench','bird','cat',
-          'dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack',
-          'umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports_ball',
-          'kite','baseball_bat','baseball_glove','skateboard','surfboard','tennis_racket',
-          'bottle','wine_glass','cup','fork','knife','spoon','bowl','banana','apple',
-          'sandwich','orange','broccoli','carrot','hot_dog','pizza','donut','cake','chair',
-          'couch','potted_plant','bed','dining_table','toilet','tv','laptop','mouse','remote',
-          'keyboard','cell_phone','microwave','oven','toaster','sink','refrigerator','book',
-          'clock','vase','scissors','teddy_bear','hair_drier','toothbrush']
+LABELS = [
+    "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
+    "traffic_light","fire_hydrant","stop_sign","parking_meter","bench","bird","cat",
+    "dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack",
+    "umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports_ball",
+    "kite","baseball_bat","baseball_glove","skateboard","surfboard","tennis_racket",
+    "bottle","wine_glass","cup","fork","knife","spoon","bowl","banana","apple",
+    "sandwich","orange","broccoli","carrot","hot_dog","pizza","donut","cake","chair",
+    "couch","potted_plant","bed","dining_table","toilet","tv","laptop","mouse","remote",
+    "keyboard","cell_phone","microwave","oven","toaster","sink","refrigerator","book",
+    "clock","vase","scissors","teddy_bear","hair_drier","toothbrush"
+]
+
 
 def color_for_label(label: str):
     h = int(hashlib.md5(label.encode("utf-8")).hexdigest(), 16) % 360
     s, v = 0.75, 1.0
-    r, g, b = colorsys.hsv_to_rgb(h/360.0, s, v)
-    return (int(r*255), int(g*255), int(b*255))
+    r, g, b = colorsys.hsv_to_rgb(h / 360.0, s, v)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
 
 # -----------------------------------------------------------------------------
 # Confidence binning
@@ -92,6 +113,7 @@ def color_for_label(label: str):
 def conf_to_bin(c: float) -> int:
     c = max(0.0, min(1.0, round(float(c), 2)))
     return int(round(c * 100))
+
 
 # -----------------------------------------------------------------------------
 # Histogram helpers
@@ -116,6 +138,7 @@ def ensure_hist_tables(conn):
     """)
     conn.commit()
     cur.close()
+
 
 def rebuild_histograms():
     conn = open_conn()
@@ -161,9 +184,11 @@ def rebuild_histograms():
         cur.close()
         conn.close()
 
+
 def read_label_counts_at_threshold(min_conf: float):
     tb = conf_to_bin(min_conf)
-    conn = open_conn(); cur = conn.cursor()
+    conn = open_conn()
+    cur = conn.cursor()
     try:
         cur.execute("""
             SELECT label, COALESCE(SUM(box_count),0)
@@ -175,7 +200,8 @@ def read_label_counts_at_threshold(min_conf: float):
         cur.execute("SELECT COALESCE(MAX(updated_at),0) FROM yfcc_label_conf_hist;")
         updated_at = cur.fetchone()[0] or 0
     finally:
-        cur.close(); conn.close()
+        cur.close()
+        conn.close()
 
     counts = {lab: 0 for lab in LABELS}
     for lab, cnt in label_rows:
@@ -184,9 +210,11 @@ def read_label_counts_at_threshold(min_conf: float):
     total_boxes = sum(counts.values())
     return counts, total_boxes, updated_at
 
+
 def read_images_with_boxes_at_threshold(min_conf: float) -> int:
     tb = conf_to_bin(min_conf)
-    conn = open_conn(); cur = conn.cursor()
+    conn = open_conn()
+    cur = conn.cursor()
     try:
         cur.execute("""
             SELECT COALESCE(SUM(image_count),0)
@@ -195,17 +223,22 @@ def read_images_with_boxes_at_threshold(min_conf: float) -> int:
         """, (tb,))
         n = cur.fetchone()[0] or 0
     finally:
-        cur.close(); conn.close()
+        cur.close()
+        conn.close()
     return int(n)
 
+
 def read_total_images_yfcc() -> int:
-    conn = open_conn(); cur = conn.cursor()
+    conn = open_conn()
+    cur = conn.cursor()
     try:
         cur.execute("SELECT COUNT(*) FROM yfcc_index;")
         n = cur.fetchone()[0] or 0
     finally:
-        cur.close(); conn.close()
+        cur.close()
+        conn.close()
     return int(n)
+
 
 # -----------------------------------------------------------------------------
 # Vector table
@@ -225,6 +258,7 @@ def ensure_vector_table(conn):
             ON yfcc_image_label_counts(updated_at DESC);
         """)
     conn.commit()
+
 
 def rebuild_vector_table():
     conn = open_conn()
@@ -263,8 +297,9 @@ def rebuild_vector_table():
     finally:
         conn.close()
 
+
 # -----------------------------------------------------------------------------
-# HTML template (unchanged)
+# HTML template
 # -----------------------------------------------------------------------------
 HTML_TEMPLATE = Template("""
 <!doctype html>
@@ -380,12 +415,14 @@ HTML_TEMPLATE = Template("""
 </html>
 """)
 
+
 def render_checkboxes(selected: set, all_checked: bool):
     items = []
     for lab in LABELS:
         checked = "checked" if (all_checked or lab in selected) else ""
         items.append(f'<label class="lbl"><input type="checkbox" name="label" value="{lab}" {checked}> {lab}</label>')
     return "\n".join(items)
+
 
 # -----------------------------------------------------------------------------
 # Routes
@@ -402,9 +439,11 @@ async def home(request: Request):
         min_conf = 0.4
     min_conf = max(0.0, min(1.0, round(min_conf, 2)))
 
-    img_params = [f"image_file_id={image_file_id}",
-                  f"select_all={'1' if all_checked else '0'}",
-                  f"min_conf={min_conf:.2f}"]
+    img_params = [
+        f"image_file_id={image_file_id}",
+        f"select_all={'1' if all_checked else '0'}",
+        f"min_conf={min_conf:.2f}",
+    ]
     if not all_checked:
         img_params += [f"label={lab}" for lab in selected]
     img_src = "/image?" + "&".join(img_params) if image_file_id else ""
@@ -413,13 +452,14 @@ async def home(request: Request):
     html_str = HTML_TEMPLATE.safe_substitute(
         qsafe=html.escape(image_file_id),
         all_checked_attr=("checked" if all_checked else ""),
-        select_all_val=('1' if all_checked else '0'),
+        select_all_val=("1" if all_checked else "0"),
         min_conf=f"{min_conf:.2f}",
         min_conf_fmt=f"{min_conf:.2f}",
         checkboxes_html=render_checkboxes(selected, all_checked),
-        img_tag=img_tag
+        img_tag=img_tag,
     )
     return HTMLResponse(html_str)
+
 
 async def image(request: Request):
     qp = request.query_params
@@ -451,84 +491,130 @@ async def image(request: Request):
     W, H = img.size
     d = ImageDraw.Draw(img)
 
-    drawn = 0
     for n, label, cx, cy, w, h, conf in rows:
         if (conf is None) or (conf < min_conf):
             continue
-        if not all_checked:
-            if not selected or (label not in selected):
-                continue
-        x0 = (cx - w/2) * W; y0 = (cy - h/2) * H
-        x1 = (cx + w/2) * W; y1 = (cy + h/2) * H
+        if not all_checked and (not selected or label not in selected):
+            continue
+        x0 = (cx - w / 2) * W
+        y0 = (cy - h / 2) * H
+        x1 = (cx + w / 2) * W
+        y1 = (cy + h / 2) * H
         color = color_for_label(label)
         d.rectangle([x0, y0, x1, y1], outline=color, width=3)
         tag = f"{n}: {label} ({conf:.2f})"
-        d.text((x0+2, y0+1), tag, fill=(255,255,255))
-        drawn += 1
+        d.text((x0 + 2, y0 + 1), tag, fill=(255, 255, 255))
 
-    buf = BytesIO(); img.save(buf, "PNG"); buf.seek(0)
+    buf = BytesIO()
+    img.save(buf, "PNG")
+    buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
+
 
 # -----------------------------------------------------------------------------
 # NEW: Run arbitrary SQL query, return rows in vector_rows format
 # -----------------------------------------------------------------------------
-async def run_query(request: Request):
-    """
-    POST /api/run_query
-    Body: { "sql": "<SELECT image_file_id FROM ...>" }
+BLOCKED_KEYWORDS = [
+    "DROP", "DELETE", "TRUNCATE", "INSERT", "UPDATE", "ALTER",
+    "CREATE", "REPLACE", "GRANT", "REVOKE", "EXEC", "EXECUTE"
+]
 
-    Executes the provided SQL as a subquery, joins with yfcc_image_label_counts
-    and yfcc_index to return full row data in the same format as /api/vector_rows.
 
-    Only SELECT statements are allowed for safety.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+def validate_sql(raw_sql: str):
+    sql = (raw_sql or "").strip()
+    if not sql:
+        raise ValueError("No SQL provided")
 
-    raw_sql = (body.get("sql") or "").strip()
-    if not raw_sql:
-        return JSONResponse({"error": "No SQL provided"}, status_code=400)
-
-    # Strip trailing semicolon — it breaks the subquery wrapping
-    raw_sql = raw_sql.rstrip().rstrip(";").rstrip()
-    first_word = raw_sql.lstrip().split()[0].upper() if raw_sql.strip() else ""
+    sql = sql.rstrip().rstrip(";").rstrip()
+    first_word = sql.lstrip().split()[0].upper() if sql else ""
     if first_word != "SELECT":
-        return JSONResponse({"error": "Only SELECT queries are permitted"}, status_code=400)
+        raise ValueError("Only SELECT queries are permitted")
 
-    # Safety: block dangerous keywords regardless of casing or placement
-    BLOCKED_KEYWORDS = ["DROP", "DELETE", "TRUNCATE", "INSERT", "UPDATE", "ALTER",
-                        "CREATE", "REPLACE", "GRANT", "REVOKE", "EXEC", "EXECUTE"]
-    upper_sql = raw_sql.upper()
+    upper_sql = sql.upper()
+
     for kw in BLOCKED_KEYWORDS:
-        # Match whole word only (e.g. don't block "created_at" for "CREATE")
         if re.search(rf"\b{kw}\b", upper_sql):
-            return JSONResponse({"error": f"Query contains forbidden keyword: {kw}"}, status_code=400)
+            raise ValueError(f"Query contains forbidden keyword: {kw}")
 
-    # Wrap the user's query: treat it as a subquery returning image_file_ids,
-    # then join with yfcc_image_label_counts + yfcc_index to get full row data.
+    # Keep user SQL simple since the backend already wraps it in a CTE.
+    if re.search(r"\bWITH\b", upper_sql):
+        raise ValueError(
+            "Queries using WITH/CTEs are not allowed. "
+            "Return a single SELECT statement."
+        )
+
+    # Block expensive correlated-subquery ranking patterns
+    if re.search(
+        r"ORDER\s+BY\s*\(\s*SELECT\s+(AVG|MAX|MIN|SUM|COUNT)\s*\(",
+        upper_sql,
+        flags=re.IGNORECASE,
+    ):
+        raise ValueError(
+            "Correlated subqueries in ORDER BY are not allowed. "
+            "Use JOIN + GROUP BY + ORDER BY MAX(...) or AVG(...)."
+        )
+
+    if re.search(
+        r"SELECT\s+(AVG|MAX|MIN|SUM|COUNT)\s*\([^)]*\)\s+FROM\s+BB_TABLE\s+WHERE\s+BB_TABLE\.IMAGE_FILE_ID\s*=",
+        upper_sql,
+        flags=re.IGNORECASE,
+    ):
+        raise ValueError(
+            "Correlated subqueries against bb_table are not allowed. "
+            "Use JOIN + GROUP BY instead."
+        )
+
+    return sql
+
+
+def execute_wrapped_query(raw_sql: str):
     wrapped_sql = f"""
-        SELECT v.image_file_id, y.path, v.total_bboxes, v.counts
-        FROM yfcc_image_label_counts v
-        JOIN yfcc_index y ON y.image_file_id = v.image_file_id
-        WHERE v.image_file_id IN (
+        WITH q AS (
             {raw_sql}
         )
+        SELECT
+            q.image_file_id,
+            y.path,
+            0 AS total_bboxes,
+            '{{}}'::jsonb AS counts
+        FROM q
+        JOIN yfcc_index y ON y.image_file_id = q.image_file_id
         LIMIT 1000
     """
 
     conn = open_conn()
     try:
-        ensure_vector_table(conn)
         with conn.cursor() as cur:
+            log.info("about to set statement timeout")
+            cur.execute("SET statement_timeout TO 30000;")
+            log.info("about to execute wrapped query")
             cur.execute(wrapped_sql)
+            log.info("wrapped query executed")
             rows = cur.fetchall()
+            log.info("fetched %d rows", len(rows))
+            return rows
+    finally:
+        conn.close()
+
+
+async def run_query(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    try:
+        raw_sql = validate_sql(body.get("sql"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    log.info("run_query received SQL: %s", raw_sql)
+
+    try:
+        rows = await run_in_threadpool(execute_wrapped_query, raw_sql)
     except Exception as e:
         log.error("run_query failed: %s\nSQL: %s", e, raw_sql)
         return JSONResponse({"error": f"Query failed: {e}"}, status_code=400)
-    finally:
-        conn.close()
 
     out_rows = []
     for image_file_id, path, total_bboxes, counts_json in rows:
@@ -546,8 +632,9 @@ async def run_query(request: Request):
     log.info("run_query returned %d rows", len(out_rows))
     return JSONResponse({"rows": out_rows, "count": len(out_rows)})
 
+
 # -----------------------------------------------------------------------------
-# Existing API routes (unchanged)
+# Existing API routes
 # -----------------------------------------------------------------------------
 FREQS_CLIENT_JS = r"""
 (function(){
@@ -653,8 +740,10 @@ FREQS_CLIENT_JS = r"""
 })();
 """
 
+
 async def freqs_client_js(request: Request):
     return HTMLResponse(FREQS_CLIENT_JS, media_type="application/javascript")
+
 
 async def freqs_api(request: Request):
     qp = request.query_params
@@ -679,17 +768,20 @@ async def freqs_api(request: Request):
         "total_images_yfcc": total_images_yfcc,
         "images_with_boxes": images_with_boxes,
         "min_conf": f"{min_conf:.2f}",
-        "labels": labels_payload
+        "labels": labels_payload,
     })
+
 
 async def recalc_freqs(request: Request):
     try:
-        rebuild_histograms()
+        await run_in_threadpool(rebuild_histograms)
     except Exception as e:
         return PlainTextResponse(f"recalc failed: {e}", status_code=500)
     return PlainTextResponse("ok (hist rebuilt)")
 
+
 MAX_LIMIT = 500
+
 
 def parse_conf_ranges_0_100(conf_str: str):
     if not conf_str:
@@ -701,24 +793,32 @@ def parse_conf_ranges_0_100(conf_str: str):
             continue
         if "-" in part:
             lo_s, hi_s = part.split("-", 1)
-            lo_bin = int(lo_s); hi_bin = int(hi_s)
+            lo_bin = int(lo_s)
+            hi_bin = int(hi_s)
         else:
             lo_bin = hi_bin = int(part)
-        lo_bin = max(0, min(100, lo_bin)); hi_bin = max(0, min(100, hi_bin))
-        if lo_bin > hi_bin: lo_bin, hi_bin = hi_bin, lo_bin
-        lo = lo_bin / 100.0; hi = min((hi_bin + 1) / 100.0, 1.0)
+        lo_bin = max(0, min(100, lo_bin))
+        hi_bin = max(0, min(100, hi_bin))
+        if lo_bin > hi_bin:
+            lo_bin, hi_bin = hi_bin, lo_bin
+        lo = lo_bin / 100.0
+        hi = min((hi_bin + 1) / 100.0, 1.0)
         ranges.append((lo, hi))
     return ranges if ranges else None
 
+
 def fetch_images_for_labels(labels, limit, offset, conf_ranges=None):
-    conn = open_conn(); cur = conn.cursor()
-    conf_sql = ""; params = []
+    conn = open_conn()
+    cur = conn.cursor()
+    conf_sql = ""
+    params = []
     if conf_ranges:
         ors = []
         for lo, hi in conf_ranges:
             ors.append("(b.confidence_score >= %s AND b.confidence_score < %s)")
             params += [lo, hi]
         conf_sql = " AND (" + " OR ".join(ors) + ")"
+
     if labels:
         query = f"""
             SELECT y.image_file_id, y.path
@@ -734,10 +834,15 @@ def fetch_images_for_labels(labels, limit, offset, conf_ranges=None):
         all_params = [labels] + params + [len(set(labels)), limit, offset]
         cur.execute(query, all_params)
     else:
-        cur.execute("SELECT y.image_file_id, y.path FROM yfcc_index y ORDER BY y.ts DESC LIMIT %s OFFSET %s;", (limit, offset))
+        cur.execute(
+            "SELECT y.image_file_id, y.path FROM yfcc_index y ORDER BY y.ts DESC LIMIT %s OFFSET %s;",
+            (limit, offset),
+        )
     rows = cur.fetchall()
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
     return [{"image_file_id": r[0], "path": r[1]} for r in rows]
+
 
 async def images_api(request: Request):
     qp = request.query_params
@@ -750,16 +855,20 @@ async def images_api(request: Request):
         offset = int(qp.get("offset", "0"))
     except ValueError:
         return JSONResponse({"error": "offset must be an int"}, status_code=400)
+
     limit = max(1, min(MAX_LIMIT, limit))
     offset = max(0, offset)
     conf_ranges = parse_conf_ranges_0_100((qp.get("conf") or "").strip())
-    images = fetch_images_for_labels(labels, limit, offset, conf_ranges)
+
+    try:
+        images = await run_in_threadpool(fetch_images_for_labels, labels, limit, offset, conf_ranges)
+    except Exception as e:
+        return JSONResponse({"error": f"images query failed: {e}"}, status_code=500)
+
     return JSONResponse({"labels": labels, "limit": limit, "offset": offset, "images": images})
 
-def conf_hist(request):
-    labels = request.query_params.getlist("label")
-    if not labels:
-        return JSONResponse({"error": "need ?label=cat&label=dog"}, status_code=400)
+
+def conf_hist_sync(labels):
     sql = """
     WITH x AS (
       SELECT image_file_id,
@@ -776,27 +885,21 @@ def conf_hist(request):
             cur.execute(sql, (labels, len(labels)))
             rows = cur.fetchall()
     counts = {b: c for (b, c) in rows if 0 <= b <= 100}
-    bins = [{"bin": i, "image_count": int(counts.get(i, 0))} for i in range(101)]
+    return [{"bin": i, "image_count": int(counts.get(i, 0))} for i in range(101)]
+
+
+async def conf_hist(request: Request):
+    labels = request.query_params.getlist("label")
+    if not labels:
+        return JSONResponse({"error": "need ?label=cat&label=dog"}, status_code=400)
+    try:
+        bins = await run_in_threadpool(conf_hist_sync, labels)
+    except Exception as e:
+        return JSONResponse({"error": f"conf_hist failed: {e}"}, status_code=500)
     return JSONResponse({"labels": labels, "bins": bins})
 
-async def vector_rows_api(request: Request):
-    qp = request.query_params
-    try:
-        limit = int(qp.get("limit", "5000"))
-    except ValueError:
-        return JSONResponse({"error": "limit must be an int"}, status_code=400)
-    try:
-        offset = int(qp.get("offset", "0"))
-    except ValueError:
-        return JSONResponse({"error": "offset must be an int"}, status_code=400)
-    limit = max(1, min(20000, limit))
-    offset = max(0, offset)
-    try:
-        min_total = int(qp.get("min_total_bboxes", "1"))
-    except ValueError:
-        min_total = 1
-    min_total = max(0, min(10_000, min_total))
 
+def vector_rows_sync(limit, offset, min_total):
     conn = open_conn()
     try:
         with conn.cursor() as cur:
@@ -812,8 +915,35 @@ async def vector_rows_api(request: Request):
             rows = cur.fetchall()
             cur.execute("SELECT COALESCE(MAX(updated_at),0) FROM yfcc_image_label_counts;")
             updated_at = cur.fetchone()[0] or 0
+        return rows, updated_at
     finally:
         conn.close()
+
+
+async def vector_rows_api(request: Request):
+    qp = request.query_params
+    try:
+        limit = int(qp.get("limit", "5000"))
+    except ValueError:
+        return JSONResponse({"error": "limit must be an int"}, status_code=400)
+    try:
+        offset = int(qp.get("offset", "0"))
+    except ValueError:
+        return JSONResponse({"error": "offset must be an int"}, status_code=400)
+
+    limit = max(1, min(20000, limit))
+    offset = max(0, offset)
+
+    try:
+        min_total = int(qp.get("min_total_bboxes", "1"))
+    except ValueError:
+        min_total = 1
+    min_total = max(0, min(10_000, min_total))
+
+    try:
+        rows, updated_at = await run_in_threadpool(vector_rows_sync, limit, offset, min_total)
+    except Exception as e:
+        return JSONResponse({"error": f"vector_rows failed: {e}"}, status_code=500)
 
     out_rows = []
     for image_file_id, path, total_bboxes, counts_json in rows:
@@ -830,12 +960,15 @@ async def vector_rows_api(request: Request):
 
     return JSONResponse({"updated_at": updated_at, "limit": limit, "offset": offset, "rows": out_rows})
 
+
 async def recalc_vectors(request: Request):
     try:
-        rebuild_vector_table()
+        await run_in_threadpool(rebuild_vector_table)
     except Exception as e:
         return PlainTextResponse(f"recalc vectors failed: {e}", status_code=500)
     return PlainTextResponse("ok (vectors rebuilt)")
+
+
 
 # -----------------------------------------------------------------------------
 # App
