@@ -23,6 +23,10 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+function rowKey(row, index) {
+  return row?.image_file_id ?? `idx-${index}`;
+}
+
 // ─── Search and ranking logic (Unused) ──────────────────────────────────────
 function parseQuery(q) {
   return q
@@ -259,6 +263,8 @@ export default function App() {
   const [mode, setMode] = useState("search");
   const [galleryItems, setGalleryItems] = useState([]);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   const [apiKey, setApiKey] = useState("");
   const [sqlLoading, setSqlLoading] = useState(false);
@@ -373,6 +379,7 @@ export default function App() {
 
       setSearchResults(rows);
       setSelectedIds(new Set());
+      setDownloadError("");
     } catch (e) {
       setError(e?.message || "Run query failed");
     } finally {
@@ -381,7 +388,7 @@ export default function App() {
   };
 
   const toggleSelected = (row, index) => {
-    const key = row?.image_file_id ?? `idx-${index}`;
+    const key = rowKey(row, index);
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -393,6 +400,44 @@ export default function App() {
     });
   };
 
+  const handleDownloadSelected = async () => {
+    if (!searchResults?.length || selectedIds.size === 0) return;
+
+    setDownloadLoading(true);
+    setDownloadError("");
+
+    try {
+      const idsToDownload = searchResults
+        .filter((row, i) => selectedIds.has(rowKey(row, i)))
+        .map((row) => row.image_file_id);
+
+      // Create and submit a form to trigger the zip file download from Starlette API server
+      const form = document.createElement("form");
+      form.action = `${API_BASE}/api/download_zip`;
+      form.method = "POST";
+      form.style.display = "none";
+
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "ids";
+      input.value = JSON.stringify(idsToDownload);
+
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+      form.remove();
+
+      // UI state reset after a small delay since form.submit doesn't return a promise
+      setTimeout(() => {
+        setDownloadLoading(false);
+      }, 1500);
+      return;
+    } catch (e) {
+      setDownloadError(e?.message || "Download failed");
+      setDownloadLoading(false);
+    }
+  };
+
   if (mode === "gallery") {
     return <Gallery items={galleryItems} onBack={() => setMode("search")} />;
   }
@@ -401,6 +446,8 @@ export default function App() {
     <div className="image-viewer-root">
       <div className="image-viewer-shell">
         <h1 className="app-title">3D Library Image Viewer</h1>
+
+        {error && <p className="error-text">{error}</p>}
 
         <div className="input-row">
           <label htmlFor="apiKey" className="api-label">
@@ -456,7 +503,6 @@ export default function App() {
         </button>
 
         {sqlError && <p className="error-text">{sqlError}</p>}
-        {error && <p className="error-text">{error}</p>}
 
         {sqlResult && (
           <>
@@ -502,20 +548,33 @@ export default function App() {
           </>
         )}
 
+        {downloadError && <p className="error-text">{downloadError}</p>}
+
         {searchResults !== null && searchResults.length > 0 && (
           <div className="results-panel">
             <div className="results-header">
               <p className="results-count">{searchResults.length} results</p>
-              <button onClick={handleEnter} className="enter-btn">
-                Enter Gallery →
-              </button>
+              <div className="results-actions">
+                <button
+                  onClick={handleDownloadSelected}
+                  className="download-btn"
+                  disabled={selectedIds.size === 0 || downloadLoading}
+                >
+                  {downloadLoading
+                    ? "Preparing ZIP…"
+                    : `Download Selected (${selectedIds.size})`}
+                </button>
+                <button onClick={handleEnter} className="enter-btn">
+                  Enter Gallery →
+                </button>
+              </div>
             </div>
 
             <div className="results-list">
               {searchResults.map((row, i) => (
                 <div
                   key={row.image_file_id || i}
-                  className={`result-item ${selectedIds.has(row?.image_file_id ?? `idx-${i}`) ? "is-selected" : ""}`}
+                  className={`result-item ${selectedIds.has(rowKey(row, i)) ? "is-selected" : ""}`}
                   onClick={() => toggleSelected(row, i)}
                   role="button"
                   tabIndex={0}
@@ -538,12 +597,12 @@ export default function App() {
                       <div>{row.image_file_id}</div>
 
                       <a
-                        href={`http://128.2.212.50:8081/?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
+                        href={`${API_BASE}/?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="result-meta-link"
                       >
-                        http://128.2.212.50:8081/?image_file_id=
+                        {API_BASE}/?image_file_id=
                         {row.image_file_id}&select_all=1&min_conf=0.40
                       </a>
                     </div>

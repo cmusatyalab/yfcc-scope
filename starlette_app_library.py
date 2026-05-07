@@ -11,6 +11,8 @@ from starlette.concurrency import run_in_threadpool
 from PIL import Image, ImageDraw
 from io import BytesIO
 from string import Template
+import datetime
+from stream_zip import stream_zip, ZIP_32
 
 import psycopg2
 import hashlib
@@ -625,6 +627,7 @@ async def run_query(request: Request):
         item = {
             "image_file_id": image_file_id,
             "path": path,
+            # currently using the same url for thumbnails, might want to change this if we add separate thumbnail URLs in the future
             "thumb_url": path,
             "total_bboxes": int(total_bboxes or 0),
         }
@@ -635,6 +638,59 @@ async def run_query(request: Request):
     log.info("run_query returned %d rows", len(out_rows))
     return JSONResponse({"rows": out_rows, "count": len(out_rows)})
 
+
+import urllib.parse
+async def download_zip(request: Request):
+    try:
+        body = await request.json()
+        image_ids = body.get("ids", [])
+    except Exception:
+        # Fallback for form-data
+        try:
+            raw_body = await request.body()
+            parsed = urllib.parse.parse_qs(raw_body.decode('utf-8'))
+            ids_str = parsed.get("ids", ["[]"])[0]
+            image_ids = json.loads(ids_str)
+        except Exception as e:
+            log.error(f"Failed to parse form body: {e}")
+            return JSONResponse({"error": "Invalid request"}, status_code=400)
+    
+    if not image_ids:
+        return JSONResponse({"error": "No IDs provided"}, status_code=400)
+
+    log.info(f"download_zip: requested {len(image_ids)} images")
+
+    def zip_files():
+        dt_now = datetime.datetime.now()
+        for i, img_id in enumerate(image_ids):
+            path, _ = fetch(img_id)
+            if not path:
+                log.warning(f"download_zip: {img_id} not found in DB")
+                continue
+                
+            try:
+                resp = requests.get(path, stream=True, timeout=10)
+                resp.raise_for_status()
+                
+                content_type = resp.headers.get("content-type", "image/jpeg")
+                if "png" in content_type:
+                    ext = "png"
+                elif "gif" in content_type:
+                    ext = "gif"
+                else:
+                    ext = "jpg"
+                    
+                filename = f"{img_id}.{ext}"
+                yield filename, dt_now, 0o600, ZIP_32, resp.iter_content(chunk_size=65536)
+            except Exception as e:
+                log.error(f"download_zip: error fetching {img_id}: {e}")
+
+    headers = {
+        "Content-Disposition": 'attachment; filename="images.zip"',
+        "Content-Type": "application/zip",
+    }
+    
+    return StreamingResponse(stream_zip(zip_files()), headers=headers, media_type="application/zip")
 
 # -----------------------------------------------------------------------------
 # Existing API routes
@@ -983,6 +1039,7 @@ app = Starlette(routes=[
     Route("/api/conf_hist", conf_hist, methods=["GET"]),
     Route("/api/vector_rows", vector_rows_api),
     Route("/api/run_query", run_query, methods=["POST"]),   # NEW
+    Route("/api/download_zip", download_zip, methods=["POST"]),
     Route("/freqs", freqs_api),
     Route("/recalc", recalc_freqs, methods=["POST"]),
     Route("/recalc_vectors", recalc_vectors, methods=["POST"]),
@@ -991,12 +1048,7 @@ app = Starlette(routes=[
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://128.2.212.50:5174",
-        "http://128.2.212.50:5173",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

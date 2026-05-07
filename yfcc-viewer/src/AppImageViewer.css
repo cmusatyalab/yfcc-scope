@@ -301,6 +301,32 @@
   background: rgba(251, 191, 36, 0.2);
 }
 
+.results-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.download-btn {
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  background: rgba(96, 165, 250, 0.1);
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #bfdbfe;
+  cursor: pointer;
+}
+
+.download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.download-btn:not(:disabled):hover {
+  background: rgba(96, 165, 250, 0.2);
+}
+
 .results-list {
   display: flex;
   flex-direction: row;
