@@ -1,6 +1,8 @@
 // Main image viewer component for YFCC viewer. User can enter their API key and use natural language to search for images. Renders a 3D first-person gallery of images returned from the search query.
 
 import React, { useRef, useState, useEffect } from "react";
+import buildSystemPrompt from "./sqlPrompt";
+import "./AppImageViewer.css";
 
 const API_BASE = "http://128.2.212.50:8081";
 
@@ -17,20 +19,37 @@ const LABELS = [
   "clock","vase","scissors","teddy_bear","hair_drier","toothbrush",
 ];
 
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+// ─── Search and ranking logic (Unused) ──────────────────────────────────────
 function parseQuery(q) {
-  return q.split(/[ ,]+/).map(x => x.trim().toLowerCase()).filter(Boolean)
+  return q
+    .split(/[ ,]+/)
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean)
     .filter((x, i, a) => a.indexOf(x) === i);
 }
-function buildVector(row) { return LABELS.map(l => Number(row?.[l] || 0)); }
+function buildVector(row) {
+  return LABELS.map((l) => Number(row?.[l] || 0));
+}
 function cosineSim(a, b) {
-  let dot = 0, na = 0, nb = 0;
-  for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i]; }
-  return (na && nb) ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
+  let dot = 0,
+    na = 0,
+    nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
 }
 function scoreRow(row, labels) {
   if (!labels.length) return Number(row?.total_bboxes || 0);
-  let matched = 0, total = 0, best = 0;
+  let matched = 0,
+    total = 0,
+    best = 0;
   for (const l of labels) {
     const c = Number(row?.[l] || 0);
     if (c > 0) matched++;
@@ -41,26 +60,31 @@ function scoreRow(row, labels) {
 }
 function rankRows(rows, labels) {
   if (!rows.length) return [];
-  const anchor = rows.reduce((a, r) => scoreRow(r, labels) > scoreRow(a, labels) ? r : a, rows[0]);
+  const anchor = rows.reduce(
+    (a, r) => (scoreRow(r, labels) > scoreRow(a, labels) ? r : a),
+    rows[0],
+  );
   const av = buildVector(anchor);
-  return rows.map(r => {
-    const sim = cosineSim(av, buildVector(r));
-    const qs = scoreRow(r, labels);
-    const comb = labels.length
-      ? sim * 0.72 + clamp(qs / 120, 0, 1) * 0.28
-      : sim * 0.8 + clamp((r.total_bboxes || 0) / 20, 0, 1) * 0.2;
-    return { ...r, combined: comb };
-  }).sort((a, b) => b.combined - a.combined);
+  return rows
+    .map((r) => {
+      const sim = cosineSim(av, buildVector(r));
+      const qs = scoreRow(r, labels);
+      const comb = labels.length
+        ? sim * 0.72 + clamp(qs / 120, 0, 1) * 0.28
+        : sim * 0.8 + clamp((r.total_bboxes || 0) / 20, 0, 1) * 0.2;
+      return { ...r, combined: comb };
+    })
+    .sort((a, b) => b.combined - a.combined);
 }
 
-// ─── Layout constants ─────────────────────────────────────────────────────────
-const WALL_X  = 440;
-const IMG_W   = 280;
-const IMG_H   = 195;
-const MAT     = 14;
+// ─── Layout constants ───────────────────────────────────────────────────────
+const WALL_X = 440;
+const IMG_W = 280;
+const IMG_H = 195;
+const MAT = 14;
 const FRAME_W = IMG_W + MAT * 2;
 const FRAME_H = IMG_H + MAT * 2;
-const ROW_Y   = FRAME_H / 2;
+const ROW_Y = FRAME_H / 2;
 
 function makeLayout(items) {
   return items.map((item, i) => {
@@ -85,7 +109,8 @@ function Gallery({ items, onBack }) {
   useEffect(() => {
     const SPD = 600;
     const ACCEL = 8;
-    let velX = 0, velZ = 0;
+    let velX = 0,
+      velZ = 0;
     let last = performance.now();
 
     const loop = () => {
@@ -95,16 +120,33 @@ function Gallery({ items, onBack }) {
 
       const c = camRef.current;
       const k = keysRef.current;
-      const sn = Math.sin(c.yaw), cs = Math.cos(c.yaw);
-      let dx = 0, dz = 0;
+      const sn = Math.sin(c.yaw),
+        cs = Math.cos(c.yaw);
+      let dx = 0,
+        dz = 0;
 
-      if (k["w"] || k["arrowup"])    { dx += sn; dz -= cs; }
-      if (k["s"] || k["arrowdown"])  { dx -= sn; dz += cs; }
-      if (k["d"] || k["arrowright"]) { dx += cs; dz += sn; }
-      if (k["a"] || k["arrowleft"])  { dx -= cs; dz -= sn; }
+      if (k["w"] || k["arrowup"]) {
+        dx += sn;
+        dz -= cs;
+      }
+      if (k["s"] || k["arrowdown"]) {
+        dx -= sn;
+        dz += cs;
+      }
+      if (k["d"] || k["arrowright"]) {
+        dx += cs;
+        dz += sn;
+      }
+      if (k["a"] || k["arrowleft"]) {
+        dx -= cs;
+        dz -= sn;
+      }
 
-      const len = Math.sqrt(dx*dx + dz*dz);
-      if (len > 0) { dx /= len; dz /= len; }
+      const len = Math.sqrt(dx * dx + dz * dz);
+      if (len > 0) {
+        dx /= len;
+        dz /= len;
+      }
 
       velX += (dx * SPD - velX) * ACCEL * dt;
       velZ += (dz * SPD - velZ) * ACCEL * dt;
@@ -112,7 +154,7 @@ function Gallery({ items, onBack }) {
       c.x = clamp(c.x + velX * dt, -(WALL_X - 100), WALL_X - 100);
       c.z = Math.min(100, c.z + velZ * dt);
 
-      tick(n => n + 1);
+      tick((n) => n + 1);
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
@@ -121,12 +163,15 @@ function Gallery({ items, onBack }) {
       keysRef.current[e.key.toLowerCase()] = true;
       if (e.key.toLowerCase() === "q") onBack();
     };
-    const onKeyUp = (e) => { keysRef.current[e.key.toLowerCase()] = false; };
+    const onKeyUp = (e) => {
+      keysRef.current[e.key.toLowerCase()] = false;
+    };
     const onMove = (e) => {
       if (document.pointerLockElement !== divRef.current) return;
       camRef.current.yaw = clamp(
         camRef.current.yaw - e.movementX * 0.003,
-        -1.25, 1.25
+        -1.25,
+        1.25,
       );
     };
     const onClick = () => divRef.current?.requestPointerLock();
@@ -150,40 +195,25 @@ function Gallery({ items, onBack }) {
   return (
     <div
       ref={divRef}
+      className="gallery-root"
       style={{
-        width: "100vw",
-        height: "100vh",
-        overflow: "hidden",
-        background: "#000",
-        perspective: "700px",
-        perspectiveOrigin: "50% 50%",
-        cursor: "crosshair",
-        userSelect: "none",
+        "--img-w": `${IMG_W}px`,
+        "--img-h": `${IMG_H}px`,
+        "--mat": `${MAT}px`,
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          transformStyle: "preserve-3d",
-          transform: worldTransform,
-        }}
-      >
+      <div className="gallery-world" style={{ transform: worldTransform }}>
         {(() => {
           const cols = Math.ceil(items.length / 4) || 1;
           const floorLen = cols * FRAME_W * 2 + 4000;
           return (
             <div
+              className="gallery-floor"
               style={{
-                position: "absolute",
                 width: WALL_X * 2,
                 height: floorLen,
                 left: -WALL_X,
                 top: -floorLen / 2,
-                background: "linear-gradient(to bottom, #c8c4be, #d8d4cf)",
-                transformStyle: "preserve-3d",
-                transform: "translateY(280px) rotateX(-90deg)",
               }}
             />
           );
@@ -191,61 +221,21 @@ function Gallery({ items, onBack }) {
 
         {items.map((item, i) => {
           const isLeft = item.side === "left";
-          const wx = isLeft ? -(WALL_X - 6) : (WALL_X - 6);
+          const wx = isLeft ? -(WALL_X - 6) : WALL_X - 6;
           const rotY = isLeft ? "90deg" : "-90deg";
           const src = item.thumb_url || item.path;
 
           return (
             <div
               key={i}
+              className="gallery-frame-container"
               style={{
-                position: "absolute",
-                left: -(IMG_W / 2 + MAT),
-                top: -(IMG_H / 2 + MAT),
-                transformStyle: "preserve-3d",
                 transform: `translate3d(${wx}px, ${item.wy}px, ${item.wz}px) rotateY(${rotY})`,
               }}
             >
-              <div
-                style={{
-                  position: "relative",
-                  width: IMG_W + MAT * 2,
-                  height: IMG_H + MAT * 2,
-                  background: "#ffffff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.25)",
-                }}
-              >
-                {src && (
-                  <img
-                    src={src}
-                    alt=""
-                    style={{
-                      width: IMG_W,
-                      height: IMG_H,
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                  />
-                )}
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: 3,
-                    left: 0,
-                    right: 0,
-                    fontSize: 9,
-                    color: "#aaa",
-                    fontFamily: "monospace",
-                    textAlign: "center",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    padding: "0 6px",
-                  }}
-                >
+              <div className="gallery-frame">
+                {src && <img src={src} alt="" className="gallery-img" />}
+                <div className="gallery-caption">
                   {item.image_file_id || "—"}
                 </div>
               </div>
@@ -254,22 +244,7 @@ function Gallery({ items, onBack }) {
         })}
       </div>
 
-      <div
-        style={{
-          position: "absolute",
-          bottom: 16,
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "rgba(0,0,0,0.45)",
-          color: "rgba(255,255,255,0.65)",
-          padding: "8px 20px",
-          borderRadius: 999,
-          fontSize: 12,
-          backdropFilter: "blur(8px)",
-          pointerEvents: "none",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <div className="gallery-hud">
         Click to lock mouse · WASD to walk · Q to exit
       </div>
     </div>
@@ -283,6 +258,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [mode, setMode] = useState("search");
   const [galleryItems, setGalleryItems] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   const [apiKey, setApiKey] = useState("");
   const [sqlLoading, setSqlLoading] = useState(false);
@@ -298,114 +274,6 @@ export default function App() {
     setGalleryItems(makeLayout(searchResults));
     setMode("gallery");
   };
-
-  const buildSystemPrompt = (limitValue) => `You are a SQL expert. Given a user's natural language description of images they want to find, write a PostgreSQL SELECT query against these two tables:
-
-Table: yfcc_index (image metadata and per-object counts)
-  image_file_id TEXT PRIMARY KEY
-  path TEXT
-  ts TIMESTAMP
-  total_bboxes INT
-  person INT, bicycle INT, car INT, motorcycle INT, airplane INT, bus INT, train INT,
-  truck INT, boat INT, traffic_light INT, fire_hydrant INT, stop_sign INT,
-  parking_meter INT, bench INT, bird INT, cat INT, dog INT, horse INT, sheep INT,
-  cow INT, elephant INT, bear INT, zebra INT, giraffe INT, backpack INT,
-  umbrella INT, handbag INT, tie INT, suitcase INT, frisbee INT, skis INT,
-  snowboard INT, sports_ball INT, kite INT, baseball_bat INT, baseball_glove INT,
-  skateboard INT, surfboard INT, tennis_racket INT, bottle INT, wine_glass INT,
-  cup INT, fork INT, knife INT, spoon INT, bowl INT, banana INT, apple INT,
-  sandwich INT, orange INT, broccoli INT, carrot INT, hot_dog INT, pizza INT,
-  donut INT, cake INT, chair INT, couch INT, potted_plant INT, bed INT,
-  dining_table INT, toilet INT, tv INT, laptop INT, mouse INT, remote INT,
-  keyboard INT, cell_phone INT, microwave INT, oven INT, toaster INT, sink INT,
-  refrigerator INT, book INT, clock INT, vase INT, scissors INT, teddy_bear INT,
-  hair_drier INT, toothbrush INT
-
-Table: bb_table (individual bounding boxes)
-  image_file_id TEXT REFERENCES yfcc_index(image_file_id)
-  bounding_box_number INT
-  label TEXT
-  confidence_score FLOAT
-  center_x FLOAT, center_y FLOAT, width FLOAT, height FLOAT
-
-Rules:
-- SELECT only image_file_id from yfcc_index. Nothing else.
-- CRITICAL: You may ONLY filter on these exact label names: person, bicycle, car, motorcycle, airplane, bus, train, truck, boat, traffic_light, fire_hydrant, stop_sign, parking_meter, bench, bird, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe, backpack, umbrella, handbag, tie, suitcase, frisbee, skis, snowboard, sports_ball, kite, baseball_bat, baseball_glove, skateboard, surfboard, tennis_racket, bottle, wine_glass, cup, fork, knife, spoon, bowl, banana, apple, sandwich, orange, broccoli, carrot, hot_dog, pizza, donut, cake, chair, couch, potted_plant, bed, dining_table, toilet, tv, laptop, mouse, remote, keyboard, cell_phone, microwave, oven, toaster, sink, refrigerator, book, clock, vase, scissors, teddy_bear, hair_drier, toothbrush. Do not invent or use any other label names.
-- If the user asks for something not directly in this list, map it creatively to the closest available labels and explain your mapping.
-- Use yfcc_index count columns for simple presence/count filters (fast).
-- Use bb_table when needed for ranking, spatial reasoning, object interaction, size, proximity, overlap, or relative position.
-- If the query suggests interaction, touching, overlap, closeness, or relationships between objects, strongly prefer using bb_table geometry fields such as center_x, center_y, width, and height.
-- When appropriate, reason about whether two boxes overlap or are close by comparing bounding box centers and sizes.
-- When joining bb_table for ranking, restrict bb_table.label to the labels relevant to the query whenever possible so confidence ranking reflects the requested objects.
-- ORDER results by relevance using confidence scores from bb_table.
-- When using MAX() or AVG(), ALWAYS:
-  - JOIN bb_table
-  - GROUP BY yfcc_index.image_file_id
-
-CRITICAL SPEED LIMITS:
-- NEVER use correlated subqueries.
-- NEVER use ORDER BY with a subquery.
-
-BAD EXAMPLE (DO NOT DO THIS — TOO SLOW):
-SELECT image_file_id
-FROM yfcc_index
-WHERE cat > 0 AND dog > 0
-ORDER BY (
-  SELECT AVG(confidence_score)
-  FROM bb_table
-  WHERE bb_table.image_file_id = yfcc_index.image_file_id
-) DESC
-LIMIT ${limitValue};
-
-GOOD EXAMPLE (FAST AND CORRECT):
-SELECT yfcc_index.image_file_id
-FROM yfcc_index
-JOIN bb_table ON yfcc_index.image_file_id = bb_table.image_file_id
-WHERE yfcc_index.cat > 0 AND yfcc_index.dog > 0
-  AND bb_table.label IN ('cat', 'dog')
-GROUP BY yfcc_index.image_file_id
-ORDER BY MAX(bb_table.confidence_score) DESC
-LIMIT ${limitValue};
-
-SPATIAL EXAMPLE (USE THIS STYLE WHEN INTERACTION/OVERLAP/CLOSENESS MATTERS):
-SELECT yfcc_index.image_file_id
-FROM yfcc_index
-JOIN bb_table a
-  ON yfcc_index.image_file_id = a.image_file_id
-JOIN bb_table b
-  ON a.image_file_id = b.image_file_id
- AND a.bounding_box_number < b.bounding_box_number
-WHERE a.label = 'person'
-  AND b.label = 'person'
-  AND a.confidence_score >= 0.5
-  AND b.confidence_score >= 0.5
-  AND ABS(a.center_x - b.center_x) < (a.width + b.width) / 2
-  AND ABS(a.center_y - b.center_y) < (a.height + b.height) / 2
-GROUP BY yfcc_index.image_file_id
-ORDER BY GREATEST(MAX(a.confidence_score), MAX(b.confidence_score)) DESC
-LIMIT ${limitValue};
-
-ADDITIONAL RULES:
-- Prefer MAX(bb_table.confidence_score) for ranking (fast and stable).
-- AVG(...) is allowed but only with JOIN + GROUP BY, never as a subquery.
-- Avoid unnecessary nested queries, CTEs, or complex patterns if a simpler query works.
-- For queries involving two instances of the same object or two different interacting objects, consider self-joining bb_table and using bounding_box_number to avoid duplicate pairs.
-- For queries involving overlap, touching, holding, kissing, closeness, or adjacency, encourage use of center_x, center_y, width, and height if applicable.
-- Always add LIMIT ${limitValue}.
-
-OUTPUT FORMAT (STRICT JSON ONLY):
-Return a valid JSON object with exactly these fields:
-{
-  "sql": string,
-  "explanation": string
-}
-
-Rules for output:
-- "sql" must contain ONLY the SQL query (no comments, no explanations).
-- "explanation" must be exactly 2 sentences explaining:
-  Sentence 1: Explain why you structured the SQL query this way (including joins, filters, ranking, and any use of bounding box geometry if applicable).
-  Sentence 2: Evaluate whether LIMIT ${limitValue} is appropriate for this query to properly explore the possible results in the database, including whether this is enough to verify that these types of images actually exist and to assess the relevance, accuracy, and overall quality of the returned matches. Explicitly say whether the limit is too small, too large, or reasonable, and suggest a better number if needed.
-`;
 
   const handleOpenAI = async () => {
     if (!query.trim()) return;
@@ -424,7 +292,7 @@ Rules for output:
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey.trim()}`,
+          Authorization: `Bearer ${apiKey.trim()}`,
         },
         body: JSON.stringify({
           model: "gpt-4o",
@@ -504,6 +372,7 @@ Rules for output:
       }
 
       setSearchResults(rows);
+      setSelectedIds(new Set());
     } catch (e) {
       setError(e?.message || "Run query failed");
     } finally {
@@ -511,82 +380,97 @@ Rules for output:
     }
   };
 
+  const toggleSelected = (row, index) => {
+    const key = row?.image_file_id ?? `idx-${index}`;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
   if (mode === "gallery") {
     return <Gallery items={galleryItems} onBack={() => setMode("search")} />;
   }
 
   return (
-    <div className="bg-[radial-gradient(circle_at_top,_#2a1d1a,_#120f0f_55%,_#090808)] text-white">
-      <div className="px-4 pt-3 pb-6 w-full space-y-3">
-        <input
-          type="password"
-          value={apiKey}
-          onChange={e => setApiKey(e.target.value)}
-          placeholder="sk-… API key"
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none placeholder:text-white/25 focus:border-white/25 w-48"
-        />
+    <div className="image-viewer-root">
+      <div className="image-viewer-shell">
+        <h1 className="app-title">3D Library Image Viewer</h1>
 
-        <h1 className="text-2xl font-bold tracking-tight text-white/90">3D Library Image Viewer</h1>
-
-        <div className="flex gap-2 mt-4 w-1/2">
+        <div className="input-row">
+          <label htmlFor="apiKey" className="api-label">
+            OpenAI API Key:
+          </label>
           <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") handleOpenAI(); }}
-            placeholder="two people kissing, a dog in a park…"
-            className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/25"
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-xxxxxxxx"
+            className="api-input"
           />
-          <select
-            value={limit}
-            onChange={e => setLimit(Number(e.target.value))}
-            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white outline-none"
-          >
-            {[20,40,60,80,100,150,200,300,500].map(n => (
-              <option key={n} value={n}>{n} images</option>
-            ))}
-          </select>
-          <button
-            onClick={handleOpenAI}
-            disabled={sqlLoading || !query.trim()}
-            className="rounded-2xl border border-violet-400/40 bg-violet-400/10 px-5 py-3 text-sm font-semibold text-violet-200 transition hover:bg-violet-400/20 disabled:opacity-50 whitespace-nowrap"
-          >
-            {sqlLoading ? "Thinking…" : "Generate SQL"}
-          </button>
         </div>
 
-        {sqlError && <p className="text-sm text-red-300">{sqlError}</p>}
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        <div className="input-row">
+          <label htmlFor="query" className="query-label">
+            Image Search Query:
+          </label>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleOpenAI();
+            }}
+            placeholder="two people kissing, a dog in a park…"
+            className="query-input"
+          />
+        </div>
+
+        <div className="input-row">
+          <label htmlFor="limit" className="query-label">
+            Number of images:
+          </label>
+          <select
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+            className="limit-select"
+          >
+            {[20, 40, 60, 80, 100, 150, 200, 300, 500].map((n) => (
+              <option key={n} value={n}>
+                {n} images
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          onClick={handleOpenAI}
+          disabled={sqlLoading || !query.trim()}
+          className="generate-btn"
+        >
+          {sqlLoading ? "Thinking…" : "Generate SQL"}
+        </button>
+
+        {sqlError && <p className="error-text">{sqlError}</p>}
+        {error && <p className="error-text">{error}</p>}
 
         {sqlResult && (
           <>
-            <div style={{ width: "50%", marginBottom: "16px" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                <div
-                  style={{
-                    background: "#1f1f1f",
-                    border: "2px solid black",
-                    borderRadius: "16px",
-                    padding: "16px",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: "11px", color: "#aaa", marginBottom: "8px" }}>
-                      SQL
-                    </div>
+            <div className="sql-panel">
+              <div className="sql-stack">
+                <div className="sql-card">
+                  <div className="sql-card-header">
+                    <div className="sql-card-title">SQL</div>
                     <button
                       onClick={() => setIsEditingSQL(!isEditingSQL)}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "#aaa",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                        marginBottom: "8px",
-                      }}
+                      className="sql-edit-btn"
                       title="Edit SQL"
                     >
-                      ✏️
+                      ✏️ Edit
                     </button>
                   </div>
 
@@ -594,56 +478,23 @@ Rules for output:
                     <textarea
                       value={editableSQL}
                       onChange={(e) => setEditableSQL(e.target.value)}
-                      style={{
-                        width: "100%",
-                        minHeight: "140px",
-                        background: "#111",
-                        color: "#4ade80",
-                        border: "1px solid #333",
-                        borderRadius: "8px",
-                        padding: "10px",
-                        fontSize: "12px",
-                        fontFamily: "monospace",
-                        resize: "vertical",
-                        outline: "none",
-                      }}
+                      className="sql-textarea"
                     />
                   ) : (
-                    <pre
-                      style={{
-                        color: "#4ade80",
-                        fontSize: "12px",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {editableSQL}
-                    </pre>
+                    <pre className="sql-pre">{editableSQL}</pre>
                   )}
                 </div>
 
-                <div
-                  style={{
-                    background: "#2a2a2a",
-                    border: "2px solid black",
-                    borderRadius: "16px",
-                    padding: "16px",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-                  }}
-                >
-                  <div style={{ fontSize: "11px", color: "#aaa", marginBottom: "8px" }}>
-                    REASONING
-                  </div>
-                  <div style={{ color: "#ddd", fontSize: "14px", lineHeight: "1.5" }}>
-                    {sqlResult.explanation}
-                  </div>
+                <div className="reasoning-card">
+                  <div className="reasoning-title">REASONING</div>
+                  <div className="reasoning-text">{sqlResult.explanation}</div>
                 </div>
               </div>
 
               <button
                 onClick={handleRunQuery}
                 disabled={queryRunLoading}
-                className="w-full mt-4 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-6 py-3 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/20 disabled:opacity-50"
+                className="run-btn"
               >
                 {queryRunLoading ? "Running…" : "▶ Run Query on Database"}
               </button>
@@ -652,57 +503,51 @@ Rules for output:
         )}
 
         {searchResults !== null && searchResults.length > 0 && (
-          <div style={{ width: "50%" }}>
-            <div className="flex items-center justify-between pt-1">
-              <p className="text-xs text-white/40">{searchResults.length} results</p>
-              <button
-                onClick={handleEnter}
-                className="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-400/20"
-              >
+          <div className="results-panel">
+            <div className="results-header">
+              <p className="results-count">{searchResults.length} results</p>
+              <button onClick={handleEnter} className="enter-btn">
                 Enter Gallery →
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column" }}>
+            <div className="results-list">
               {searchResults.map((row, i) => (
                 <div
                   key={row.image_file_id || i}
-                  style={{ width: "400px", marginBottom: "12px" }}
+                  className={`result-item ${selectedIds.has(row?.image_file_id ?? `idx-${i}`) ? "is-selected" : ""}`}
+                  onClick={() => toggleSelected(row, i)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleSelected(row, i);
+                    }
+                  }}
                 >
-                  <img
-                    src={row.thumb_url || row.path}
-                    alt=""
-                    style={{ width: "400px", display: "block" }}
-                  />
-        
-                  {/* IMAGE ID */}
-                  <div
-                      style={{
-                        fontSize: "11px",
-                        color: "#aaa",
-                        fontFamily: "monospace",
-                        wordBreak: "break-all",
-                        background: "#111",
-                        padding: "4px 6px",
-                        borderRadius: "6px",
-                        marginTop: "4px",
-                      }}
-                    >
+                  <div className="result-card">
+                    <img
+                      src={row.thumb_url || row.path}
+                      alt=""
+                      className="result-img"
+                    />
+
+                    {/* IMAGE ID */}
+                    <div className="result-meta">
                       <div>{row.image_file_id}</div>
-                    
+
                       <a
                         href={`http://128.2.212.50:8081/?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{
-                          color: "#60a5fa",
-                          textDecoration: "underline",
-                          fontSize: "10px",
-                        }}
+                        className="result-meta-link"
                       >
-                        http://128.2.212.50:8081/?image_file_id={row.image_file_id}&select_all=1&min_conf=0.40
+                        http://128.2.212.50:8081/?image_file_id=
+                        {row.image_file_id}&select_all=1&min_conf=0.40
                       </a>
                     </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -710,7 +555,7 @@ Rules for output:
         )}
 
         {searchResults !== null && searchResults.length === 0 && (
-          <p className="text-sm text-white/35 py-6">No images matched.</p>
+          <p className="empty-text">No images matched.</p>
         )}
       </div>
     </div>
