@@ -1,3 +1,5 @@
+// Visualize all 8,000 fetched images simultaneously as a 3D point cloud.
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";

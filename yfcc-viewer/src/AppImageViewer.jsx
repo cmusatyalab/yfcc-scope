@@ -1,6 +1,8 @@
+// Main image viewer component for YFCC viewer. User can enter their API key and use natural language to search for images. Renders a 3D first-person gallery of images returned from the search query.
+
 import React, { useRef, useState, useEffect } from "react";
 
-const API_BASE = "http://128.2.212.50:8080";
+const API_BASE = "http://128.2.212.50:8081";
 
 const LABELS = [
   "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
@@ -689,7 +691,7 @@ Rules for output:
                       <div>{row.image_file_id}</div>
                     
                       <a
-                        href={`http://128.2.212.50:8080/?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
+                        href={`http://128.2.212.50:8081/?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
@@ -698,7 +700,7 @@ Rules for output:
                           fontSize: "10px",
                         }}
                       >
-                        http://128.2.212.50:8080/?image_file_id={row.image_file_id}&select_all=1&min_conf=0.40
+                        http://128.2.212.50:8081/?image_file_id={row.image_file_id}&select_all=1&min_conf=0.40
                       </a>
                     </div>
                 </div>

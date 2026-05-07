@@ -1,3 +1,5 @@
+// Dashboard view for YFCC viewer. Lets users select labels and confidence bins to filter images, and shows a histogram of confidence levels for the selected labels.
+
 import React, { useEffect, useMemo, useState } from "react";
 
 const LABELS = ["airplane","apple","backpack","banana","baseball_bat",

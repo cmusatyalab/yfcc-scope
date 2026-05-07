@@ -1,3 +1,6 @@
+# Starlette app library code for YFCC viewer (image with boxes) and API.
+# Runs on port 8081 by default (yfcc-viewer apps use this port to connect to the API)
+
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, StreamingResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Route
@@ -989,6 +992,7 @@ app = Starlette(routes=[
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://128.2.212.50:5174",
         "http://128.2.212.50:5173",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
