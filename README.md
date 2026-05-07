@@ -20,23 +20,21 @@ yfcc-scope
 │   └── json2duckdb.py
 │
 ├── yfcc-viewer
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.jsx                                 # Route to different viewer apps
+│   │   ├── AppImageViewer.jsx
+│   │   ├── AppDashboard.jsx
+│   │   ├── AppPCA3DExplorer.jsx
+│   │   ├── index.css
+│   │   └── main.jsx
 │   ├── eslint.config.js
 │   ├── index.html
 │   ├── package.json
 │   ├── package-lock.json
 │   ├── public
 │   ├── README.md
-│   ├── src
-│   │   ├── App.css
-│   │   ├── App.jsx
-│   │   ├── assets
-│   │   ├── index.css
-│   │   └── main.jsx
 │   └── vite.config.js
-│
-├── App3DPCAExplorer.jsx                            # The 3 App*.jsx files are React frontends
-├── App.jsx
-├── AppLibraryViewer.jsx
 │
 ├── starlette_app_library.py                        # Code for the Starlette application
 ├── yfcc_yolo_to_postgres-entire-shard-batch.py     # Process WebDataset shards, runs YOLO on each image, and insert results into PostgreSQL
