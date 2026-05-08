@@ -11,6 +11,8 @@ const MAT = 14;
 const FRAME_W = IMG_W + MAT * 2;
 const FRAME_H = IMG_H + MAT * 2;
 const ROW_Y = FRAME_H / 2;
+const FRAME_Y_OFFSET = 32;
+const IMG_SCALE = 36;
 
 export function makeLayout(items) {
   return items.map((item, i) => {
@@ -19,7 +21,7 @@ export function makeLayout(items) {
     return {
       ...item,
       side: slot % 2 === 0 ? "left" : "right",
-      wy: slot < 2 ? -ROW_Y : ROW_Y,
+      wy: slot < 2 ? -ROW_Y + FRAME_Y_OFFSET : ROW_Y + FRAME_Y_OFFSET,
       wz: -(col * FRAME_W + 400),
     };
   });
@@ -128,11 +130,15 @@ function Frame({ item, onClick }) {
       {src && (
         <Html
           transform
-          position={[0, 0, 1]} // Extrude slightly to avoid z-fighting
-          scale={36}
+          position={[0, 4, 1]} // Extrude slightly to avoid z-fighting
           style={{ pointerEvents: "none" }} // Let the mesh underneath handle clicks
         >
-          <div style={{ width: `${IMG_W}px`, height: `${IMG_H}px` }}>
+          <div
+            style={{
+              width: `${IMG_W * IMG_SCALE}px`,
+              height: `${IMG_H * IMG_SCALE}px`,
+            }}
+          >
             <img
               src={src}
               alt=""
@@ -150,7 +156,7 @@ function Frame({ item, onClick }) {
 
       {/* Caption beneath frame */}
       <Text
-        position={[0, -(IMG_H / 2 + 10), 2]}
+        position={[0, -(IMG_H / 2) + 8, 2]}
         fontSize={12}
         color="white"
         anchorX="center"
@@ -191,10 +197,7 @@ export default function Gallery({ items, onBack }) {
         </mesh>
 
         {/* Ceiling */}
-        <mesh
-          position={[0, 300, -floorLen / 2]}
-          rotation={[Math.PI / 2, 0, 0]}
-        >
+        <mesh position={[0, 300, -floorLen / 2]} rotation={[Math.PI / 2, 0, 0]}>
           <planeGeometry args={[limitX * 2, floorLen]} />
           <meshStandardMaterial color="#0a0a0a" />
         </mesh>
@@ -233,7 +236,8 @@ export default function Gallery({ items, onBack }) {
 
       {/* HUD Info */}
       <div className="gallery-hud">
-        Move mouse to look around · WASD to move · Click image to select · E to see selection · Q to exit
+        Move mouse to look around · WASD to move · Click image to select · E to
+        see selection · Q to exit
       </div>
     </div>
   );
