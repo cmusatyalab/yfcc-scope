@@ -4,7 +4,7 @@ import React from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import Dashboard from "./AppDashboard.jsx";
 import PCA3DExplorer from "./AppPCA3DExplorer.jsx";
-import ImageViewer from "./AppImageViewer.jsx";
+import ImageViewer from "./image-viewer/AppImageViewer.jsx";
 import "./App.css";
 
 export default function App() {
