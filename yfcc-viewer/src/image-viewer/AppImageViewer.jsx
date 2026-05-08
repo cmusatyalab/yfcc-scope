@@ -205,7 +205,17 @@ export default function App() {
   };
 
   if (mode === "gallery") {
-    return <Gallery items={galleryItems} onBack={() => setMode("search")} />;
+    return (
+      <Gallery
+        items={galleryItems}
+        onBack={() => setMode("search")}
+        searchResults={searchResults}
+        selectedIds={selectedIds}
+        toggleSelected={toggleSelected}
+        onDownloadSelected={handleDownloadSelected}
+        downloadLoading={downloadLoading}
+      />
+    );
   }
 
   return (

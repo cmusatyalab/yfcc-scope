@@ -1,7 +1,9 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { PointerLockControls, Html, Text } from "@react-three/drei";
 import * as THREE from "three";
+import SelectedPanel from "./SelectedPanel";
+import { rowKey } from "./ImageResultsPanel";
 
 // ─── Layout constants ───────────────────────────────────────────────────────
 const WALL_X = 440;
@@ -28,17 +30,22 @@ export function makeLayout(items) {
 }
 
 // Custom Player component for WASD navigation
-function Player({ onBack }) {
+function Player({ onBack, onShowSelected }) {
   const keys = useRef({});
   const speed = 800;
   const direction = new THREE.Vector3();
   const frontVector = new THREE.Vector3();
   const sideVector = new THREE.Vector3();
+  const { gl } = useThree();
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       keys.current[e.key.toLowerCase()] = true;
       if (e.key.toLowerCase() === "q") onBack();
+      if (e.key.toLowerCase() === "e") {
+        document.exitPointerLock();
+        onShowSelected();
+      }
     };
     const handleKeyUp = (e) => {
       keys.current[e.key.toLowerCase()] = false;
@@ -51,7 +58,7 @@ function Player({ onBack }) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [onBack]);
+  }, [onBack, onShowSelected, gl]);
 
   useFrame((state, delta) => {
     const k = keys.current;
@@ -95,7 +102,7 @@ function Player({ onBack }) {
 }
 
 // Renders an individual image frame
-function Frame({ item, onClick }) {
+function Frame({ item, index, onClick, isSelected }) {
   const isLeft = item.side === "left";
   const x = isLeft ? -(WALL_X - 6) : WALL_X - 6;
   const y = item.wy;
@@ -105,25 +112,30 @@ function Frame({ item, onClick }) {
   const src = item.thumb_url || item.path || "";
   const [hovered, setHovered] = useState(false);
 
+  // Outline color based on selection and hover
+  const frameColor = isSelected ? "#156378" : hovered ? "#555" : "#222";
+
   return (
     <group position={[x, y, z]} rotation={[0, rotY, 0]}>
       {/* Interactive Backboard */}
       <mesh
         onClick={(e) => {
           e.stopPropagation();
-          onClick(item);
+          onClick(item, index);
         }}
         onPointerOver={(e) => {
           e.stopPropagation();
+          // document.body.style.cursor = "pointer";
           setHovered(true);
         }}
         onPointerOut={(e) => {
           e.stopPropagation();
+          // document.body.style.cursor = "auto";
           setHovered(false);
         }}
       >
         <planeGeometry args={[FRAME_W, FRAME_H]} />
-        <meshBasicMaterial color={hovered ? "#555" : "#222"} />
+        <meshBasicMaterial color={frameColor} />
       </mesh>
 
       {/* Image display (Using HTML overlay to bypass WebGL CORS restrictions) */}
@@ -168,10 +180,24 @@ function Frame({ item, onClick }) {
   );
 }
 
-export default function Gallery({ items, onBack }) {
+export default function Gallery({
+  items,
+  onBack,
+  searchResults,
+  selectedIds,
+  toggleSelected,
+  onDownloadSelected,
+  downloadLoading,
+}) {
   const cols = Math.ceil(items.length / 4) || 1;
   const floorLen = cols * FRAME_W * 2 + 4000;
   const limitX = WALL_X;
+
+  const [showSelectedPanel, setShowSelectedPanel] = useState(false);
+
+  const handleShowSelected = () => {
+    setShowSelectedPanel(true);
+  };
 
   return (
     <div className="gallery-root">
@@ -184,8 +210,8 @@ export default function Gallery({ items, onBack }) {
         <directionalLight position={[0, 10, 0]} intensity={1.5} />
 
         {/* First Person Controls */}
-        <Player onBack={onBack} />
-        <PointerLockControls />
+        <Player onBack={onBack} onShowSelected={handleShowSelected} />
+        {!showSelectedPanel && <PointerLockControls />}
 
         {/* Floor */}
         <mesh
@@ -223,16 +249,26 @@ export default function Gallery({ items, onBack }) {
         {/* Images */}
         {items.map((item, i) => (
           <Frame
-            key={i}
+            key={rowKey(item, i)}
+            index={i}
             item={item}
-            onClick={(selectedItem) => {
-              // Add selection logic here later
-              console.log("Selected Image ID:", selectedItem.image_file_id);
-              alert("Selected Image: " + selectedItem.image_file_id);
+            isSelected={selectedIds.has(rowKey(item, i))}
+            onClick={(selectedItem, index) => {
+              toggleSelected(selectedItem, index);
             }}
           />
         ))}
       </Canvas>
+
+      <SelectedPanel
+        showSelectedPanel={showSelectedPanel}
+        setShowSelectedPanel={setShowSelectedPanel}
+        selectedIds={selectedIds}
+        searchResults={searchResults}
+        toggleSelected={toggleSelected}
+        onDownloadSelected={onDownloadSelected}
+        downloadLoading={downloadLoading}
+      />
 
       {/* HUD Info */}
       <div className="gallery-hud">
