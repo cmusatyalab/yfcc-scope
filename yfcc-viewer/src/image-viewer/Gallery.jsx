@@ -1,8 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
-
-function clamp(v, lo, hi) {
-  return Math.max(lo, Math.min(hi, v));
-}
+import { Canvas, useFrame } from "@react-three/fiber";
+import { PointerLockControls, Html, Text } from "@react-three/drei";
+import * as THREE from "three";
 
 // ─── Layout constants ───────────────────────────────────────────────────────
 const WALL_X = 440;
@@ -26,153 +25,215 @@ export function makeLayout(items) {
   });
 }
 
-export default function Gallery({ items, onBack }) {
-  const divRef = useRef(null);
-  const camRef = useRef({ x: 0, z: 0, yaw: 0 });
-  const keysRef = useRef({});
-  const rafRef = useRef();
-  const [, tick] = useState(0);
+// Custom Player component for WASD navigation
+function Player({ onBack }) {
+  const keys = useRef({});
+  const speed = 800;
+  const direction = new THREE.Vector3();
+  const frontVector = new THREE.Vector3();
+  const sideVector = new THREE.Vector3();
 
   useEffect(() => {
-    const SPD = 600;
-    const ACCEL = 8;
-    let velX = 0,
-      velZ = 0;
-    let last = performance.now();
-
-    const loop = () => {
-      const now = performance.now();
-      const dt = Math.min((now - last) / 1000, 0.05);
-      last = now;
-
-      const c = camRef.current;
-      const k = keysRef.current;
-      const sn = Math.sin(c.yaw),
-        cs = Math.cos(c.yaw);
-      let dx = 0,
-        dz = 0;
-
-      if (k["w"] || k["arrowup"]) {
-        dx += sn;
-        dz -= cs;
-      }
-      if (k["s"] || k["arrowdown"]) {
-        dx -= sn;
-        dz += cs;
-      }
-      if (k["d"] || k["arrowright"]) {
-        dx += cs;
-        dz += sn;
-      }
-      if (k["a"] || k["arrowleft"]) {
-        dx -= cs;
-        dz -= sn;
-      }
-
-      const len = Math.sqrt(dx * dx + dz * dz);
-      if (len > 0) {
-        dx /= len;
-        dz /= len;
-      }
-
-      velX += (dx * SPD - velX) * ACCEL * dt;
-      velZ += (dz * SPD - velZ) * ACCEL * dt;
-
-      c.x = clamp(c.x + velX * dt, -(WALL_X - 100), WALL_X - 100);
-      c.z = Math.min(100, c.z + velZ * dt);
-
-      tick((n) => n + 1);
-      rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-
-    const onKeyDown = (e) => {
-      keysRef.current[e.key.toLowerCase()] = true;
+    const handleKeyDown = (e) => {
+      keys.current[e.key.toLowerCase()] = true;
       if (e.key.toLowerCase() === "q") onBack();
     };
-    const onKeyUp = (e) => {
-      keysRef.current[e.key.toLowerCase()] = false;
+    const handleKeyUp = (e) => {
+      keys.current[e.key.toLowerCase()] = false;
     };
-    const onMove = (e) => {
-      if (document.pointerLockElement !== divRef.current) return;
-      camRef.current.yaw = clamp(
-        camRef.current.yaw - e.movementX * 0.003,
-        -1.25,
-        1.25,
-      );
-    };
-    const onClick = () => divRef.current?.requestPointerLock();
 
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    document.addEventListener("mousemove", onMove);
-    divRef.current?.addEventListener("click", onClick);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
 
     return () => {
-      cancelAnimationFrame(rafRef.current);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      document.removeEventListener("mousemove", onMove);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
     };
   }, [onBack]);
 
-  const { x, z, yaw } = camRef.current;
-  const worldTransform = `rotateY(${-yaw}rad) translate3d(${-x}px, 0px, ${-z}px)`;
+  useFrame((state, delta) => {
+    const k = keys.current;
+
+    // Movement axes based on camera orientation
+    frontVector.set(
+      0,
+      0,
+      (k["s"] || k["arrowdown"] ? 1 : 0) - (k["w"] || k["arrowup"] ? 1 : 0),
+    );
+    sideVector.set(
+      (k["d"] || k["arrowright"] ? 1 : 0) - (k["a"] || k["arrowleft"] ? 1 : 0),
+      0,
+      0,
+    );
+
+    direction
+      .subVectors(frontVector, sideVector)
+      .normalize()
+      .multiplyScalar(speed * delta);
+
+    // Apply movement
+    state.camera.translateX(-direction.x);
+    state.camera.translateZ(direction.z);
+
+    // Clamping to avoid walking through walls (simulated padding)
+    const limitX = WALL_X - 100;
+    state.camera.position.x = THREE.MathUtils.clamp(
+      state.camera.position.x,
+      -limitX,
+      limitX,
+    );
+    // Do not walk backward past origin
+    state.camera.position.z = Math.min(100, state.camera.position.z);
+
+    // Keep eye level locked
+    state.camera.position.y = 0;
+  });
+
+  return null;
+}
+
+// Renders an individual image frame
+function Frame({ item, onClick }) {
+  const isLeft = item.side === "left";
+  const x = isLeft ? -(WALL_X - 6) : WALL_X - 6;
+  const y = item.wy;
+  const z = item.wz;
+  const rotY = isLeft ? Math.PI / 2 : -Math.PI / 2;
+
+  const src = item.thumb_url || item.path || "";
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <div
-      ref={divRef}
-      className="gallery-root"
-      style={{
-        "--img-w": `${IMG_W}px`,
-        "--img-h": `${IMG_H}px`,
-        "--mat": `${MAT}px`,
-      }}
-    >
-      <div className="gallery-world" style={{ transform: worldTransform }}>
-        {(() => {
-          const cols = Math.ceil(items.length / 4) || 1;
-          const floorLen = cols * FRAME_W * 2 + 4000;
-          return (
-            <div
-              className="gallery-floor"
+    <group position={[x, y, z]} rotation={[0, rotY, 0]}>
+      {/* Interactive Backboard */}
+      <mesh
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick(item);
+        }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={(e) => {
+          e.stopPropagation();
+          setHovered(false);
+        }}
+      >
+        <planeGeometry args={[FRAME_W, FRAME_H]} />
+        <meshBasicMaterial color={hovered ? "#555" : "#222"} />
+      </mesh>
+
+      {/* Image display (Using HTML overlay to bypass WebGL CORS restrictions) */}
+      {src && (
+        <Html
+          transform
+          position={[0, 0, 1]} // Extrude slightly to avoid z-fighting
+          scale={36}
+          style={{ pointerEvents: "none" }} // Let the mesh underneath handle clicks
+        >
+          <div style={{ width: `${IMG_W}px`, height: `${IMG_H}px` }}>
+            <img
+              src={src}
+              alt=""
               style={{
-                width: WALL_X * 2,
-                height: floorLen,
-                left: -WALL_X,
-                top: -floorLen / 2,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
               }}
+              draggable={false}
             />
-          );
-        })()}
+          </div>
+        </Html>
+      )}
 
-        {items.map((item, i) => {
-          const isLeft = item.side === "left";
-          const wx = isLeft ? -(WALL_X - 6) : WALL_X - 6;
-          const rotY = isLeft ? "90deg" : "-90deg";
-          const src = item.thumb_url || item.path;
+      {/* Caption beneath frame */}
+      <Text
+        position={[0, -(IMG_H / 2 + 10), 2]}
+        fontSize={12}
+        color="white"
+        anchorX="center"
+        anchorY="top"
+      >
+        {item.image_file_id || "—"}
+      </Text>
+    </group>
+  );
+}
 
-          return (
-            <div
-              key={i}
-              className="gallery-frame-container"
-              style={{
-                transform: `translate3d(${wx}px, ${item.wy}px, ${item.wz}px) rotateY(${rotY})`,
-              }}
-            >
-              <div className="gallery-frame">
-                {src && <img src={src} alt="" className="gallery-img" />}
-                <div className="gallery-caption">
-                  {item.image_file_id || "—"}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+export default function Gallery({ items, onBack }) {
+  const cols = Math.ceil(items.length / 4) || 1;
+  const floorLen = cols * FRAME_W * 2 + 4000;
+  const limitX = WALL_X;
 
+  return (
+    <div className="gallery-root">
+      {/* Center crosshair */}
+      <div className="gallery-crosshair" />
+
+      <Canvas camera={{ position: [0, 0, 0], fov: 75, near: 0.1, far: 20000 }}>
+        {/* Lights */}
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[0, 10, 0]} intensity={1.5} />
+
+        {/* First Person Controls */}
+        <Player onBack={onBack} />
+        <PointerLockControls />
+
+        {/* Floor */}
+        <mesh
+          position={[0, -200, -floorLen / 2]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[limitX * 2, floorLen]} />
+          <meshStandardMaterial color="#1a1a1a" />
+        </mesh>
+
+        {/* Ceiling */}
+        <mesh
+          position={[0, 300, -floorLen / 2]}
+          rotation={[Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[limitX * 2, floorLen]} />
+          <meshStandardMaterial color="#0a0a0a" />
+        </mesh>
+
+        {/* Left Wall */}
+        <mesh
+          position={[-limitX, 0, -floorLen / 2]}
+          rotation={[0, Math.PI / 2, 0]}
+        >
+          <planeGeometry args={[floorLen, 1000]} />
+          <meshStandardMaterial color="#222" />
+        </mesh>
+
+        {/* Right Wall */}
+        <mesh
+          position={[limitX, 0, -floorLen / 2]}
+          rotation={[0, -Math.PI / 2, 0]}
+        >
+          <planeGeometry args={[floorLen, 1000]} />
+          <meshStandardMaterial color="#222" />
+        </mesh>
+
+        {/* Images */}
+        {items.map((item, i) => (
+          <Frame
+            key={i}
+            item={item}
+            onClick={(selectedItem) => {
+              // Add selection logic here later
+              console.log("Selected Image ID:", selectedItem.image_file_id);
+              alert("Selected Image: " + selectedItem.image_file_id);
+            }}
+          />
+        ))}
+      </Canvas>
+
+      {/* HUD Info */}
       <div className="gallery-hud">
-        Click to lock mouse · WASD to move · Q to exit
+        Move mouse to look around · WASD to move · Click image to select · E to see selection · Q to exit
       </div>
     </div>
   );
