@@ -23,11 +23,19 @@ yfcc-scope
 │   ├── src
 │   │   ├── App.css
 │   │   ├── App.jsx                                 # Route to different viewer apps
-│   │   ├── AppImageViewer.jsx
 │   │   ├── AppDashboard.jsx
 │   │   ├── AppPCA3DExplorer.jsx
 │   │   ├── index.css
-│   │   └── main.jsx
+│   │   ├── main.jsx
+│   │   └── image-viewer/                           # 3D Library Image Viewer app
+│   │       ├── AppImageViewer.css
+│   │       ├── AppImageViewer.jsx
+│   │       ├── Gallery.jsx
+│   │       ├── ImageResultsPanel.jsx
+│   │       ├── SearchControlPanel.jsx
+│   │       ├── SqlDisplayPanel.jsx
+│   │       └── sqlPrompt.js
+│   │
 │   ├── eslint.config.js
 │   ├── index.html
 │   ├── package.json

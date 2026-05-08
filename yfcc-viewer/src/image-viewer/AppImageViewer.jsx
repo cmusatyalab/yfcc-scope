@@ -157,6 +157,15 @@ export default function App() {
     });
   };
 
+  const handleSelectAll = () => {
+    if (!searchResults) return;
+    setSelectedIds(new Set(searchResults.map((row, i) => rowKey(row, i))));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
   const handleDownloadSelected = async () => {
     if (!searchResults?.length || selectedIds.size === 0) return;
 
@@ -231,6 +240,8 @@ export default function App() {
           searchResults={searchResults}
           selectedIds={selectedIds}
           toggleSelected={toggleSelected}
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClearSelection}
           onDownloadSelected={handleDownloadSelected}
           downloadLoading={downloadLoading}
           downloadError={downloadError}
