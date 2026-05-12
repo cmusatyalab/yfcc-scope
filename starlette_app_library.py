@@ -1,5 +1,5 @@
 # Starlette app library code for YFCC viewer (image with boxes) and API.
-# Runs on port 8081 by default (yfcc-viewer apps use this port to connect to the API)
+# Runs on port 8080 by default (yfcc-viewer apps use this port to connect to the API)
 
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, StreamingResponse, JSONResponse, PlainTextResponse
@@ -24,7 +24,7 @@ import json
 import logging
 import re
 import requests
-
+import urllib.parse
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -80,11 +80,7 @@ def fetch(image_file_id: str):
         return (None, [])
 
     path = rows[0][0]
-    cleaned = [
-        (n, label, cx, cy, w, h, conf)
-        for _, n, label, cx, cy, w, h, conf in rows
-        if label is not None
-    ]
+    cleaned = [(n, label, cx, cy, w, h, conf) for _, n, label, cx, cy, w, h, conf in rows if label is not None]
     return (path, cleaned)
 
 
@@ -154,7 +150,8 @@ def rebuild_histograms():
         cur.execute("BEGIN;")
         cur.execute("TRUNCATE yfcc_label_conf_hist;")
         cur.execute("TRUNCATE yfcc_images_maxbin_hist;")
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO yfcc_label_conf_hist (label, conf_bin, box_count, updated_at)
             SELECT
                 b.label,
@@ -164,8 +161,11 @@ def rebuild_histograms():
             FROM bb_table b
             WHERE b.confidence_score IS NOT NULL
             GROUP BY b.label, conf_bin;
-        """, (now,))
-        cur.execute("""
+        """,
+            (now,),
+        )
+        cur.execute(
+            """
             WITH maxbin AS (
                 SELECT
                     image_file_id,
@@ -178,7 +178,9 @@ def rebuild_histograms():
             SELECT max_bin, COUNT(*)::BIGINT, %s
             FROM maxbin
             GROUP BY max_bin;
-        """, (now,))
+        """,
+            (now,),
+        )
         cur.execute("COMMIT;")
     except Exception as e:
         cur.execute("ROLLBACK;")
@@ -195,12 +197,15 @@ def read_label_counts_at_threshold(min_conf: float):
     conn = open_conn()
     cur = conn.cursor()
     try:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT label, COALESCE(SUM(box_count),0)
             FROM yfcc_label_conf_hist
             WHERE conf_bin >= %s
             GROUP BY label;
-        """, (tb,))
+        """,
+            (tb,),
+        )
         label_rows = cur.fetchall()
         cur.execute("SELECT COALESCE(MAX(updated_at),0) FROM yfcc_label_conf_hist;")
         updated_at = cur.fetchone()[0] or 0
@@ -221,11 +226,14 @@ def read_images_with_boxes_at_threshold(min_conf: float) -> int:
     conn = open_conn()
     cur = conn.cursor()
     try:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COALESCE(SUM(image_count),0)
             FROM yfcc_images_maxbin_hist
             WHERE max_bin >= %s;
-        """, (tb,))
+        """,
+            (tb,),
+        )
         n = cur.fetchone()[0] or 0
     finally:
         cur.close()
@@ -273,7 +281,8 @@ def rebuild_vector_table():
         with conn.cursor() as cur:
             cur.execute("BEGIN;")
             cur.execute("TRUNCATE yfcc_image_label_counts;")
-            cur.execute("""
+            cur.execute(
+                """
                 WITH per_label AS (
                     SELECT image_file_id, label, COUNT(*)::int AS cnt
                     FROM bb_table
@@ -291,7 +300,9 @@ def rebuild_vector_table():
                 INSERT INTO yfcc_image_label_counts (image_file_id, total_bboxes, counts, updated_at)
                 SELECT image_file_id, total_bboxes, counts, %s
                 FROM per_image;
-            """, (now,))
+            """,
+                (now,),
+            )
             cur.execute("COMMIT;")
     except Exception as e:
         with conn.cursor() as cur:
@@ -436,7 +447,7 @@ async def home(request: Request):
     qp = request.query_params
     image_file_id = qp.get("image_file_id", "")
     selected = set(qp.getlist("label"))
-    all_checked = (qp.get("select_all", "1") == "1")
+    all_checked = qp.get("select_all", "1") == "1"
 
     try:
         min_conf = float(qp.get("min_conf", "0.4"))
@@ -469,7 +480,7 @@ async def home(request: Request):
 async def image(request: Request):
     qp = request.query_params
     image_file_id = qp.get("image_file_id", "")
-    all_checked = (qp.get("select_all", "1") == "1")
+    all_checked = qp.get("select_all", "1") == "1"
     selected = set(qp.getlist("label"))
 
     try:
@@ -543,10 +554,7 @@ def validate_sql(raw_sql: str):
 
     # Keep user SQL simple since the backend already wraps it in a CTE.
     if re.search(r"\bWITH\b", upper_sql):
-        raise ValueError(
-            "Queries using WITH/CTEs are not allowed. "
-            "Return a single SELECT statement."
-        )
+        raise ValueError("Queries using WITH/CTEs are not allowed. " "Return a single SELECT statement.")
 
     # Block expensive correlated-subquery ranking patterns
     if re.search(
@@ -555,8 +563,7 @@ def validate_sql(raw_sql: str):
         flags=re.IGNORECASE,
     ):
         raise ValueError(
-            "Correlated subqueries in ORDER BY are not allowed. "
-            "Use JOIN + GROUP BY + ORDER BY MAX(...) or AVG(...)."
+            "Correlated subqueries in ORDER BY are not allowed. " "Use JOIN + GROUP BY + ORDER BY MAX(...) or AVG(...)."
         )
 
     if re.search(
@@ -564,10 +571,7 @@ def validate_sql(raw_sql: str):
         upper_sql,
         flags=re.IGNORECASE,
     ):
-        raise ValueError(
-            "Correlated subqueries against bb_table are not allowed. "
-            "Use JOIN + GROUP BY instead."
-        )
+        raise ValueError("Correlated subqueries against bb_table are not allowed. " "Use JOIN + GROUP BY instead.")
 
     return sql
 
@@ -639,8 +643,8 @@ async def run_query(request: Request):
     return JSONResponse({"rows": out_rows, "count": len(out_rows)})
 
 
-import urllib.parse
 async def download_zip(request: Request):
+    # Parse image id list from request body
     try:
         body = await request.json()
         image_ids = body.get("ids", [])
@@ -648,13 +652,13 @@ async def download_zip(request: Request):
         # Fallback for form-data
         try:
             raw_body = await request.body()
-            parsed = urllib.parse.parse_qs(raw_body.decode('utf-8'))
+            parsed = urllib.parse.parse_qs(raw_body.decode("utf-8"))
             ids_str = parsed.get("ids", ["[]"])[0]
             image_ids = json.loads(ids_str)
         except Exception as e:
             log.error(f"Failed to parse form body: {e}")
             return JSONResponse({"error": "Invalid request"}, status_code=400)
-    
+
     if not image_ids:
         return JSONResponse({"error": "No IDs provided"}, status_code=400)
 
@@ -667,11 +671,11 @@ async def download_zip(request: Request):
             if not path:
                 log.warning(f"download_zip: {img_id} not found in DB")
                 continue
-                
+
             try:
                 resp = requests.get(path, stream=True, timeout=10)
                 resp.raise_for_status()
-                
+
                 content_type = resp.headers.get("content-type", "image/jpeg")
                 if "png" in content_type:
                     ext = "png"
@@ -679,7 +683,7 @@ async def download_zip(request: Request):
                     ext = "gif"
                 else:
                     ext = "jpg"
-                    
+
                 filename = f"{img_id}.{ext}"
                 yield filename, dt_now, 0o600, ZIP_32, resp.iter_content(chunk_size=65536)
             except Exception as e:
@@ -689,8 +693,9 @@ async def download_zip(request: Request):
         "Content-Disposition": 'attachment; filename="images.zip"',
         "Content-Type": "application/zip",
     }
-    
+
     return StreamingResponse(stream_zip(zip_files()), headers=headers, media_type="application/zip")
+
 
 # -----------------------------------------------------------------------------
 # Existing API routes
@@ -822,13 +827,15 @@ async def freqs_api(request: Request):
         frac = (float(cnt) / float(total_boxes)) if total_boxes else 0.0
         labels_payload[lab] = {"fraction": frac}
 
-    return JSONResponse({
-        "updated_at": updated_at,
-        "total_images_yfcc": total_images_yfcc,
-        "images_with_boxes": images_with_boxes,
-        "min_conf": f"{min_conf:.2f}",
-        "labels": labels_payload,
-    })
+    return JSONResponse(
+        {
+            "updated_at": updated_at,
+            "total_images_yfcc": total_images_yfcc,
+            "images_with_boxes": images_with_boxes,
+            "min_conf": f"{min_conf:.2f}",
+            "labels": labels_payload,
+        }
+    )
 
 
 async def recalc_freqs(request: Request):
@@ -963,14 +970,17 @@ def vector_rows_sync(limit, offset, min_total):
     try:
         with conn.cursor() as cur:
             ensure_vector_table(conn)
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT v.image_file_id, y.path, v.total_bboxes, v.counts
                 FROM yfcc_image_label_counts v
                 JOIN yfcc_index y ON y.image_file_id = v.image_file_id
                 WHERE v.total_bboxes >= %s
                 ORDER BY y.ts DESC
                 LIMIT %s OFFSET %s;
-            """, (min_total, limit, offset))
+            """,
+                (min_total, limit, offset),
+            )
             rows = cur.fetchall()
             cur.execute("SELECT COALESCE(MAX(updated_at),0) FROM yfcc_image_label_counts;")
             updated_at = cur.fetchone()[0] or 0
@@ -1028,23 +1038,24 @@ async def recalc_vectors(request: Request):
     return PlainTextResponse("ok (vectors rebuilt)")
 
 
-
 # -----------------------------------------------------------------------------
 # App
 # -----------------------------------------------------------------------------
-app = Starlette(routes=[
-    Route("/", home),
-    Route("/image", image),
-    Route("/api/images", images_api),
-    Route("/api/conf_hist", conf_hist, methods=["GET"]),
-    Route("/api/vector_rows", vector_rows_api),
-    Route("/api/run_query", run_query, methods=["POST"]),   # NEW
-    Route("/api/download_zip", download_zip, methods=["POST"]),
-    Route("/freqs", freqs_api),
-    Route("/recalc", recalc_freqs, methods=["POST"]),
-    Route("/recalc_vectors", recalc_vectors, methods=["POST"]),
-    Route("/freqs.js", freqs_client_js),
-])
+app = Starlette(
+    routes=[
+        Route("/", home),
+        Route("/image", image),
+        Route("/api/images", images_api),
+        Route("/api/conf_hist", conf_hist, methods=["GET"]),
+        Route("/api/vector_rows", vector_rows_api),
+        Route("/api/run_query", run_query, methods=["POST"]),  # NEW
+        Route("/api/download_zip", download_zip, methods=["POST"]),
+        Route("/freqs", freqs_api),
+        Route("/recalc", recalc_freqs, methods=["POST"]),
+        Route("/recalc_vectors", recalc_vectors, methods=["POST"]),
+        Route("/freqs.js", freqs_client_js),
+    ]
+)
 
 app.add_middleware(
     CORSMiddleware,
