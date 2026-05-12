@@ -664,16 +664,30 @@ async def download_zip(request: Request):
 
     log.info(f"download_zip: requested {len(image_ids)} images")
 
+    # Get the paths of all requested image IDs in a single DB query
+    id_to_path = {}
+    try:
+        conn = open_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT image_file_id, path FROM yfcc_index WHERE image_file_id = ANY(%s)", (image_ids,))
+            for row in cur.fetchall():
+                id_to_path[row[0]] = row[1]
+        conn.close()
+    except Exception as e:
+        log.error(f"download_zip bulk db fetch failed: {e}")
+
     def zip_files():
         dt_now = datetime.datetime.now()
-        for i, img_id in enumerate(image_ids):
-            path, _ = fetch(img_id)
-            if not path:
-                log.warning(f"download_zip: {img_id} not found in DB")
-                continue
 
+        session = requests.Session()
+
+        # Fetch a single image into memory
+        def fetch_image(img_id):
+            path = id_to_path.get(img_id)
+            if not path:
+                return img_id, None, None, None
             try:
-                resp = requests.get(path, stream=True, timeout=10)
+                resp = session.get(path, timeout=10)
                 resp.raise_for_status()
 
                 content_type = resp.headers.get("content-type", "image/jpeg")
@@ -684,10 +698,33 @@ async def download_zip(request: Request):
                 else:
                     ext = "jpg"
 
-                filename = f"{img_id}.{ext}"
-                yield filename, dt_now, 0o600, ZIP_32, resp.iter_content(chunk_size=65536)
+                return img_id, ext, resp.content, None
             except Exception as e:
-                log.error(f"download_zip: error fetching {img_id}: {e}")
+                return img_id, None, None, e
+
+        # Download images in chunks to avoid memory issues with large downloads
+        import concurrent.futures
+
+        chunk_size = 5
+        for i in range(0, len(image_ids), chunk_size):
+            chunk_ids = image_ids[i : i + chunk_size]
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=chunk_size) as executor:
+                # Submit fetch tasks for the current chunk of images to thread pool
+                futures = [executor.submit(fetch_image, img_id) for img_id in chunk_ids]
+
+                # Extract results and yield them for zip streaming
+                for future in futures:
+                    img_id, ext, content, err = future.result()
+                    if err is not None:
+                        log.error(f"download_zip: error fetching {img_id}: {err}")
+                        continue
+                    if ext is None:
+                        log.warning(f"download_zip: {img_id} not found in DB")
+                        continue
+
+                    filename = f"{img_id}.{ext}"
+                    yield filename, dt_now, 0o600, ZIP_32, [content]
 
     headers = {
         "Content-Disposition": 'attachment; filename="images.zip"',
