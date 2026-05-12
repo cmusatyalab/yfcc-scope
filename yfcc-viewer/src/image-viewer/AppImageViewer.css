@@ -168,7 +168,8 @@
 
 .sql-textarea {
   width: 100%;
-  min-height: 140px;
+  box-sizing: border-box;
+  min-height: 160px;
   background: #111;
   color: #4ade80;
   border: 1px solid #333;

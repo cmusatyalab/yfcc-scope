@@ -22,7 +22,7 @@ export default function SqlDisplayPanel({
               className="sql-edit-btn"
               title="Edit SQL"
             >
-              ✏️ Edit
+              {isEditingSQL ? "💾 Save" : "✏️ Edit"}
             </button>
           </div>
 
