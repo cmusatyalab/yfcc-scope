@@ -53,7 +53,7 @@ export default function SearchControlPanel({
           onChange={(e) => setLimit(Number(e.target.value))}
           className="limit-select"
         >
-          {[20, 40, 60, 80, 100, 150, 200, 300, 500].map((n) => (
+          {[20, 40, 60, 80, 100, 150].map((n) => (
             <option key={n} value={n}>
               {n} images
             </option>

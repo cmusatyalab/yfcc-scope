@@ -33,6 +33,7 @@ yfcc-scope
 │   │       ├── Gallery.jsx
 │   │       ├── ImageResultsPanel.jsx
 │   │       ├── SearchControlPanel.jsx
+│   │       ├── SelectedPanel.jsx
 │   │       ├── SqlDisplayPanel.jsx
 │   │       └── sqlPrompt.js
 │   │

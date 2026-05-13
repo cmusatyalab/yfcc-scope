@@ -51,11 +51,16 @@ export default function SelectedPanel({
                 onClick={() => toggleSelected(row, i)}
                 title="Click to deselect"
               >
-                <img
-                  src={row.thumb_url || row.path}
-                  alt=""
-                  className="selected-card-img"
-                />
+                <div className="selected-card-img-wrapper">
+                  <img
+                    src={row.thumb_url || row.path}
+                    alt=""
+                    className="selected-card-img"
+                  />
+                  <div className="selected-card-overlay">
+                    <span>✖ Deselect</span>
+                  </div>
+                </div>
                 <div className="selected-card-meta">{row.image_file_id}</div>
               </button>
             ))}

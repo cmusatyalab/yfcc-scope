@@ -30,7 +30,7 @@ export function makeLayout(items) {
 }
 
 // Custom Player component for WASD navigation
-function Player({ onBack, onShowSelected }) {
+function Player({ onBack, onShowSelected, floorLen }) {
   const keys = useRef({});
   const speed = 800;
   const direction = new THREE.Vector3();
@@ -91,8 +91,12 @@ function Player({ onBack, onShowSelected }) {
       -limitX,
       limitX,
     );
-    // Do not walk backward past origin
-    state.camera.position.z = Math.min(100, state.camera.position.z);
+    // Do not walk backward past origin or forward past floor end
+    state.camera.position.z = THREE.MathUtils.clamp(
+      state.camera.position.z,
+      -(floorLen || 1000) + 100,
+      -100
+    );
 
     // Keep eye level locked
     state.camera.position.y = 0;
@@ -145,24 +149,17 @@ function Frame({ item, index, onClick, isSelected }) {
           position={[0, 4, 1]} // Extrude slightly to avoid z-fighting
           style={{ pointerEvents: "none" }} // Let the mesh underneath handle clicks
         >
-          <div
+          <img
+            src={src}
+            alt=""
             style={{
               width: `${IMG_W * IMG_SCALE}px`,
               height: `${IMG_H * IMG_SCALE}px`,
+              objectFit: "cover",
+              display: "block",
             }}
-          >
-            <img
-              src={src}
-              alt=""
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: "block",
-              }}
-              draggable={false}
-            />
-          </div>
+            draggable={false}
+          />
         </Html>
       )}
 
@@ -190,7 +187,7 @@ export default function Gallery({
   downloadLoading,
 }) {
   const cols = Math.ceil(items.length / 4) || 1;
-  const floorLen = cols * FRAME_W * 2 + 4000;
+  const floorLen = cols * FRAME_W + 400;
   const limitX = WALL_X;
 
   const [showSelectedPanel, setShowSelectedPanel] = useState(false);
@@ -210,7 +207,7 @@ export default function Gallery({
         <directionalLight position={[0, 10, 0]} intensity={1.5} />
 
         {/* First Person Controls */}
-        <Player onBack={onBack} onShowSelected={handleShowSelected} />
+        <Player onBack={onBack} onShowSelected={handleShowSelected} floorLen={floorLen} />
         {!showSelectedPanel && <PointerLockControls />}
 
         {/* Floor */}
