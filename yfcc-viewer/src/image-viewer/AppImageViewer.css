@@ -33,7 +33,7 @@
   font-family: sans-serif;
   font-size: 14px;
   pointer-events: none;
-  z-index: 99999999;
+  z-index: 99999998;
   white-space: nowrap;
 }
 
@@ -397,7 +397,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 999999999;
 }
 
 .image-enlarge-content {

@@ -39,7 +39,7 @@ export default function SearchControlPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter") onGenerate();
           }}
-          placeholder="a dog in a park"
+          placeholder="cat dog"
           className="query-input"
         />
       </div>

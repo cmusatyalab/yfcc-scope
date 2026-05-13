@@ -117,7 +117,7 @@ function Frame({ item, index, onClick, isSelected }) {
   const [hovered, setHovered] = useState(false);
 
   // Outline color based on selection and hover
-  const frameColor = isSelected ? "#156378" : hovered ? "#555" : "#222";
+  const frameColor = isSelected ? "#2466a4" : hovered ? "#555" : "#222";
 
   return (
     <group position={[x, y, z]} rotation={[0, rotY, 0]}>

@@ -702,9 +702,9 @@ async def download_zip(request: Request):
             except Exception as e:
                 return img_id, None, None, e
 
-        # Download images in chunks to avoid memory issues with large downloads
         import concurrent.futures
 
+        # Download chunk of images in parallel, yielding results as they arrive for streaming zip generation
         chunk_size = 5
         for i in range(0, len(image_ids), chunk_size):
             chunk_ids = image_ids[i : i + chunk_size]
@@ -1096,7 +1096,12 @@ app = Starlette(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://cloudlet032.elijah.cs.cmu.edu:5173",
+        "http://128.2.212.50:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
