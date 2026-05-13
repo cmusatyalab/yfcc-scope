@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>YFCC Boxes Viewer</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <form id="ctrl_form" method="GET" action="/">
+      <div class="row toolbar">
+        <input
+          name="image_file_id"
+          value="{{ image_file_id }}"
+          placeholder="1234567890_1234567890"
+        />
+        <button type="submit">Show</button>
+        <span class="muted"
+          >Tip: turn "Select all" off to pick specific labels.</span
+        >
+      </div>
+
+      <div class="row toolbar" id="top_toolbar">
+        <label style="font-weight: 600">
+          <input
+            id="select_all"
+            type="checkbox"
+            {%
+            if
+            all_checked
+            %}checked{%
+            endif
+            %}
+          />
+          Select all
+        </label>
+        <input
+          type="hidden"
+          id="select_all_hidden"
+          name="select_all"
+          value="{{ select_all_val }}"
+        />
+
+        <button type="button" id="sort_original">Original order</button>
+        <button type="button" id="sort_alpha">A-Z</button>
+        <button type="button" id="sort_freq">By frequency</button>
+
+        <div
+          class="row"
+          style="gap: 8px; align-items: center; margin-left: 8px"
+        >
+          <label for="min_conf" class="muted" style="font-weight: 600"
+            >Min confidence</label
+          >
+          <input
+            type="range"
+            id="min_conf"
+            name="min_conf"
+            min="0.4"
+            max="1"
+            step="0.01"
+            value="{{ min_conf }}"
+          />
+          <span id="min_conf_val" class="muted">{{ min_conf_fmt }}</span>
+        </div>
+      </div>
+
+      <div class="grid" id="labels_grid">
+        {% for lab in labels %}
+          <label class="lbl">
+            <input
+              type="checkbox"
+              name="label"
+              value="{{ lab }}"
+              {% if all_checked or (lab in selected_labels) %}checked{% endif %}
+            />
+            {{ lab }}
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="muted" id="freq_updated_note" style="margin-top: 6px"></div>
+    </form>
+
+    <div class="img-wrap">
+      {% if img_src %}
+      <img style="max-width: 95%; border: 1px solid #eee" src="{{ img_src }}" />
+      {% endif %}
+    </div>
+
+    <script src="/static/js/page.js"></script>
+    <script src="/static/js/freqs.js"></script>
+  </body>
+</html>
