@@ -17,7 +17,7 @@ export default function App() {
         <div className="app-topbar-inner">
           <div className="app-brand">YFCC Viewer</div>
           <nav className="app-nav">
-            <NavLink to="/image" className={linkClassName}>
+            <NavLink to="/image-viewer" className={linkClassName}>
               Image Viewer
             </NavLink>
             <NavLink to="/dashboard" className={linkClassName}>
@@ -31,11 +31,11 @@ export default function App() {
       </div>
 
       <Routes>
-        <Route path="/" element={<Navigate to="/image" replace />} />
+        <Route path="/" element={<Navigate to="/image-viewer" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/pca3d" element={<PCA3DExplorer />} />
-        <Route path="/image" element={<ImageViewer />} />
-        <Route path="*" element={<Navigate to="/image" replace />} />
+        <Route path="/image-viewer" element={<ImageViewer />} />
+        <Route path="*" element={<Navigate to="/image-viewer" replace />} />
       </Routes>
     </div>
   );

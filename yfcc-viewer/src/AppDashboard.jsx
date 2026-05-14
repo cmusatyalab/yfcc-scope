@@ -17,7 +17,8 @@ const LABELS = ["airplane","apple","backpack","banana","baseball_bat",
   "toaster","toilet","toothbrush","traffic_light",
   "train","truck","tv","umbrella","vase","wine_glass","zebra"];
 
-const API_BASE = "http://128.2.212.50:8080";
+// Read API base from env
+const API_BASE = (import.meta.env.VITE_API_BASE ?? "");
 
 function binsToConfString(binSet) {
   const arr = Array.from(binSet).sort((a, b) => a - b);

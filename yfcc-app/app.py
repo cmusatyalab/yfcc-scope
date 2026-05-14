@@ -1,7 +1,6 @@
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
 from pathlib import Path
-
 from starlette.routing import Route
 from starlette.staticfiles import StaticFiles
 
@@ -15,15 +14,24 @@ from .routes import (
     images_api,
     recalc_freqs,
     recalc_vectors,
+    redirect_to_viewer,
     run_query,
     vector_rows_api,
+    viewer_app,
+    viewer_index,
 )
 
 setup_logging()
 
+
 app = Starlette(
     routes=[
         Route("/", home),
+        Route("/image-viewer", redirect_to_viewer),
+        Route("/dashboard", redirect_to_viewer),
+        Route("/pca3d", redirect_to_viewer),
+        Route("/viewer", viewer_index),
+        Route("/viewer/{path:path}", viewer_app),
         Route("/image", image),
         Route("/api/images", images_api),
         Route("/api/conf_hist", conf_hist, methods=["GET"]),

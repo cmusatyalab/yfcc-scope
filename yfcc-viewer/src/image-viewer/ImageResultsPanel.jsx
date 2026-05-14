@@ -17,6 +17,7 @@ export default function ImageResultsPanel({
   onEnterGallery,
   apiBase,
 }) {
+  const baseUrl = apiBase || window.location.origin;
   const [enlargedImage, setEnlargedImage] = useState(null);
   const [showSelectedPanel, setShowSelectedPanel] = useState(false);
 
@@ -99,12 +100,12 @@ export default function ImageResultsPanel({
                   <div>{row.image_file_id}</div>
 
                   <a
-                    href={`${apiBase}/?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
+                    href={`${baseUrl}/?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="result-meta-link"
                   >
-                    {apiBase}/?image_file_id=
+                    {baseUrl}/?image_file_id=
                     {row.image_file_id}&select_all=1&min_conf=0.40
                   </a>
                 </div>

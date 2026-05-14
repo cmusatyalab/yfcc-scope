@@ -311,7 +311,7 @@
 }
 
 .result-card {
-  height: 250px;
+  height: 270px;
   display: flex;
   flex-direction: column;
   background: #121212;

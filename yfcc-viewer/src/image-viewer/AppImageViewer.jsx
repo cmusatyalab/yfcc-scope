@@ -8,7 +8,8 @@ import SqlDisplayPanel from "./SqlDisplayPanel";
 import ImageResultsPanel, { rowKey } from "./ImageResultsPanel";
 import "./AppImageViewer.css";
 
-const API_BASE = "http://128.2.212.50:8080";
+// Read API base from env
+const API_BASE = (import.meta.env.VITE_API_BASE ?? "");
 
 export default function App() {
   const [query, setQuery] = useState("cat dog");

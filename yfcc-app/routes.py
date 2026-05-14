@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 from io import BytesIO
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, StreamingResponse, JSONResponse, PlainTextResponse
+from starlette.responses import HTMLResponse, StreamingResponse, JSONResponse, PlainTextResponse, FileResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
 from stream_zip import stream_zip, ZIP_32
 
@@ -31,6 +31,35 @@ from .utils import build_vector_row, color_for_label, parse_conf_ranges_0_100, v
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Define the path to the viewer's dist directory
+viewer_dist_dir = Path(__file__).parent.parent / "yfcc-viewer" / "dist"
+
+
+async def viewer_index(request: Request):
+    index_path = viewer_dist_dir / "index.html"
+    if not index_path.is_file():
+        return PlainTextResponse("Viewer build not found. Run: npm run build", status_code=404)
+    return FileResponse(index_path)
+
+
+async def viewer_app(request: Request):
+    # Try fetch from dist first, then fallback to index.html for routing
+    rel_path = request.path_params.get("path", "")
+    if not rel_path:
+        return await viewer_index(request)
+
+    candidate = viewer_dist_dir / rel_path
+    if candidate.is_file():
+        return FileResponse(candidate)
+
+    return await viewer_index(request)
+
+
+async def redirect_to_viewer(request: Request):
+    rel_path = request.url.path.lstrip("/")
+    target = f"/viewer/{rel_path}" if rel_path else "/viewer"
+    return RedirectResponse(url=target, status_code=302)
 
 
 def _parse_min_conf(qp, default=0.4):
