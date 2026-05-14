@@ -26,6 +26,12 @@ export default function App() {
             <NavLink to="/pca3d" className={linkClassName}>
               3D PCA Viewer
             </NavLink>
+            <a
+              href={import.meta.env.DEV ? "http://127.0.0.1:8080/" : "/"}
+              className="app-nav-link"
+            >
+              Box Viewer →
+            </a>
           </nav>
         </div>
       </div>

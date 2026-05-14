@@ -6,6 +6,9 @@
     <link rel="stylesheet" href="/static/css/app.css" />
   </head>
   <body>
+    <div class="page-top">
+      <a class="btn-link" href="/viewer">Image Viewer →</a>
+    </div>
     <form id="ctrl_form" method="GET" action="/">
       <div class="row toolbar">
         <input
@@ -66,15 +69,24 @@
 
       <div class="grid" id="labels_grid">
         {% for lab in labels %}
-          <label class="lbl">
-            <input
-              type="checkbox"
-              name="label"
-              value="{{ lab }}"
-              {% if all_checked or (lab in selected_labels) %}checked{% endif %}
-            />
-            {{ lab }}
-          </label>
+        <label class="lbl">
+          <input
+            type="checkbox"
+            name="label"
+            value="{{ lab }}"
+            {%
+            if
+            all_checked
+            or
+            (lab
+            in
+            selected_labels)
+            %}checked{%
+            endif
+            %}
+          />
+          {{ lab }}
+        </label>
         {% endfor %}
       </div>
 
