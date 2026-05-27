@@ -357,3 +357,15 @@ def execute_wrapped_query(raw_sql: str):
             return rows
     finally:
         conn.close()
+
+
+def execute_count_query(raw_sql: str):
+    conn = open_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET statement_timeout TO 30000;")
+            cur.execute(raw_sql)
+            rows = cur.fetchall()
+            return rows
+    finally:
+        conn.close()

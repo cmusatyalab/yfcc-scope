@@ -1,6 +1,6 @@
 // Main image viewer component for YFCC viewer. User can enter their API key and use natural language to search for images. Renders a 3D first-person gallery of images returned from the search query.
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import buildSystemPrompt from "./sqlPrompt";
 import Gallery, { makeLayout } from "./Gallery";
 import SearchControlPanel from "./SearchControlPanel";
@@ -9,7 +9,7 @@ import ImageResultsPanel, { rowKey } from "./ImageResultsPanel";
 import "./AppImageViewer.css";
 
 // Read API base from env
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "");
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export default function App() {
   const [query, setQuery] = useState("cat dog");
@@ -33,6 +33,10 @@ export default function App() {
   const [isEditingSQL, setIsEditingSQL] = useState(false);
   const [editableSQL, setEditableSQL] = useState("");
 
+  const [totalCount, setTotalCount] = useState(null);
+  const [countLoading, setCountLoading] = useState(false);
+  const lastCountSqlRef = useRef("");
+
   const handleEnter = () => {
     if (!searchResults?.length) return;
     setGalleryItems(makeLayout(searchResults));
@@ -50,6 +54,7 @@ export default function App() {
     setSqlResult(null);
     setSqlError("");
     setError("");
+    setTotalCount(null);
 
     try {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -107,6 +112,63 @@ export default function App() {
       setSqlLoading(false);
     }
   };
+
+  const buildCountSql = (sql) => {
+    const sqlWithoutLimit = sql
+      .replace(/LIMIT\s+\d+/i, "")
+      .replace(/;+$/, "")
+      .trim();
+    return `SELECT COUNT(*) as count FROM (${sqlWithoutLimit}) AS subquery`;
+  };
+
+  // Run COUNT(*) query whenever the saved SQL changes
+  useEffect(() => {
+    if (!editableSQL?.trim()) return;
+
+    const countSql = buildCountSql(editableSQL);
+    if (countSql === lastCountSqlRef.current) return;
+    lastCountSqlRef.current = countSql;
+
+    const controller = new AbortController();
+
+    const fetchCount = async (sql, signal) => {
+      setCountLoading(true);
+
+      try {
+        const res = await fetch(`${API_BASE}/api/run_query_count`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql }),
+          signal,
+        });
+
+        if (!res.ok) {
+          throw new Error(`Server error (${res.status})`);
+        }
+
+        const data = await res.json();
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (signal.aborted) return;
+        if (rows.length > 0) {
+          setTotalCount(rows[0].count);
+        } else {
+          setTotalCount(0);
+        }
+      } catch (e) {
+        if (e?.name === "AbortError") return;
+        console.error("Count query failed", e);
+        setTotalCount("Error");
+      } finally {
+        if (!signal.aborted) setCountLoading(false);
+      }
+    };
+
+    fetchCount(countSql, controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [editableSQL]);
 
   const handleRunQuery = async () => {
     if (!editableSQL?.trim()) return;
@@ -245,6 +307,8 @@ export default function App() {
           setEditableSQL={setEditableSQL}
           onRunQuery={handleRunQuery}
           queryRunLoading={queryRunLoading}
+          totalCount={totalCount}
+          countLoading={countLoading}
         />
 
         <ImageResultsPanel

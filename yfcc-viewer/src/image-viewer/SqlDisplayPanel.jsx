@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 export default function SqlDisplayPanel({
   sqlResult,
@@ -8,7 +8,27 @@ export default function SqlDisplayPanel({
   setEditableSQL,
   onRunQuery,
   queryRunLoading,
+  totalCount,
+  countLoading,
 }) {
+  const [draftSQL, setDraftSQL] = useState(editableSQL);
+
+  const handleToggleEdit = () => {
+    if (isEditingSQL) {
+      setEditableSQL(draftSQL);
+      setIsEditingSQL(false);
+      return;
+    }
+
+    setDraftSQL(editableSQL);
+    setIsEditingSQL(true);
+  };
+
+  const handleCancelEdit = () => {
+    setDraftSQL(editableSQL);
+    setIsEditingSQL(false);
+  };
+
   if (!sqlResult) return null;
 
   return (
@@ -17,19 +37,30 @@ export default function SqlDisplayPanel({
         <div className="sql-card">
           <div className="sql-card-header">
             <div className="sql-card-title">SQL</div>
-            <button
-              onClick={() => setIsEditingSQL(!isEditingSQL)}
-              className="sql-edit-btn"
-              title="Edit SQL"
-            >
-              {isEditingSQL ? "💾 Save" : "✏️ Edit"}
-            </button>
+            <div className="sql-edit-actions">
+              {isEditingSQL && (
+                <button
+                  onClick={handleCancelEdit}
+                  className="sql-edit-btn"
+                  title="Cancel"
+                >
+                  ❌ Cancel
+                </button>
+              )}
+              <button
+                onClick={handleToggleEdit}
+                className="sql-edit-btn"
+                title="Edit SQL"
+              >
+                {isEditingSQL ? "💾 Save" : "✏️ Edit"}
+              </button>
+            </div>
           </div>
 
           {isEditingSQL ? (
             <textarea
-              value={editableSQL}
-              onChange={(e) => setEditableSQL(e.target.value)}
+              value={draftSQL}
+              onChange={(e) => setDraftSQL(e.target.value)}
               className="sql-textarea"
             />
           ) : (
@@ -38,7 +69,29 @@ export default function SqlDisplayPanel({
         </div>
 
         <div className="reasoning-card">
-          <div className="reasoning-title">REASONING</div>
+          <div
+            className="reasoning-title"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span>REASONING</span>
+            <span
+              className={
+                countLoading
+                  ? "reasoning-count-badge is-loading"
+                  : "reasoning-count-badge"
+              }
+            >
+              {countLoading
+                ? "Counting total matches..."
+                : totalCount !== null
+                  ? `Total Matches: ${totalCount}`
+                  : "Total Matches: --"}
+            </span>
+          </div>
           <div className="reasoning-text">{sqlResult.explanation}</div>
         </div>
       </div>

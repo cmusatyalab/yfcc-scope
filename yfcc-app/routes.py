@@ -16,6 +16,7 @@ from .constants import LABELS, MAX_LIMIT
 from .db import (
     conf_hist_sync,
     execute_wrapped_query,
+    execute_count_query,
     fetch,
     fetch_images_for_labels,
     open_conn,
@@ -188,6 +189,28 @@ async def run_query(request: Request):
 
     log.info("run_query returned %d rows", len(out_rows))
     return JSONResponse({"rows": out_rows, "count": len(out_rows)})
+
+
+async def run_query_count(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    try:
+        raw_sql = validate_sql(body.get("sql"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    log.info("run_query_count received SQL: %s", raw_sql)
+
+    try:
+        rows = await run_in_threadpool(execute_count_query, raw_sql)
+    except Exception as e:
+        log.error("run_query_count failed: %s\nSQL: %s", e, raw_sql)
+        return JSONResponse({"error": f"Query failed: {e}"}, status_code=400)
+
+    return JSONResponse({"rows": [{"count": r[0]} for r in rows]})
 
 
 async def download_zip(request: Request):
