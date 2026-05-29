@@ -22,7 +22,11 @@ __pycache__/
 
 # Environments
 .venv/
+.venv.bak/
 node_modules/
 dist/
 dist-ssr/
 *.local
+
+# Large files
+*.npy
