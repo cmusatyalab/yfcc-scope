@@ -95,7 +95,7 @@ function Player({ onBack, onShowSelected, floorLen }) {
     state.camera.position.z = THREE.MathUtils.clamp(
       state.camera.position.z,
       -(floorLen || 1000) + 100,
-      -100
+      -100,
     );
 
     // Keep eye level locked
@@ -115,6 +115,19 @@ function Frame({ item, index, onClick, isSelected }) {
 
   const src = item.thumb_url || item.path || "";
   const [hovered, setHovered] = useState(false);
+  const [inView, setInView] = useState(false);
+  const inViewRef = useRef(false);
+
+  useFrame((state) => {
+    // Determine distance from camera
+    const dist = Math.abs(state.camera.position.z - z);
+    // Load if within 3000 units (~3-4 columns away)
+    const shouldBeInView = dist < 3000;
+    if (shouldBeInView !== inViewRef.current) {
+      inViewRef.current = shouldBeInView;
+      setInView(shouldBeInView);
+    }
+  });
 
   // Outline color based on selection and hover
   const frameColor = isSelected ? "#2466a4" : hovered ? "#555" : "#222";
@@ -142,8 +155,8 @@ function Frame({ item, index, onClick, isSelected }) {
         <meshBasicMaterial color={frameColor} />
       </mesh>
 
-      {/* Image display (Using HTML overlay to bypass WebGL CORS restrictions) */}
-      {src && (
+      {src && inView ? (
+        /* Image display (Using HTML overlay to bypass WebGL CORS restrictions) */
         <Html
           transform
           position={[0, 4, 1]} // Extrude slightly to avoid z-fighting
@@ -161,6 +174,12 @@ function Frame({ item, index, onClick, isSelected }) {
             draggable={false}
           />
         </Html>
+      ) : (
+        /* Placeholder for unloaded images */
+        <mesh position={[0, 0, 1]} raycast={() => null}>
+          <planeGeometry args={[IMG_W, IMG_H]} />
+          <meshBasicMaterial color="#333" />
+        </mesh>
       )}
 
       {/* Caption beneath frame */}
@@ -170,6 +189,7 @@ function Frame({ item, index, onClick, isSelected }) {
         color="white"
         anchorX="center"
         anchorY="top"
+        raycast={() => null}
       >
         {item.image_file_id || "—"}
       </Text>
@@ -207,7 +227,11 @@ export default function Gallery({
         <directionalLight position={[0, 10, 0]} intensity={1.5} />
 
         {/* First Person Controls */}
-        <Player onBack={onBack} onShowSelected={handleShowSelected} floorLen={floorLen} />
+        <Player
+          onBack={onBack}
+          onShowSelected={handleShowSelected}
+          floorLen={floorLen}
+        />
         {!showSelectedPanel && <PointerLockControls />}
 
         {/* Floor */}
