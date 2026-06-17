@@ -1,6 +1,6 @@
 # YFCC100M Image Index
 
-This project's goal is to take the raw YFCC100M corpus, run a smaller and faster object detection model over every image, and produce a structured index that makes it easy to pull out interesting subsets, which then become the bootstrap datasets HAWK searches over.
+This project's goal is to take the raw YFCC100M corpus and produce structured indexes that make it easy to pull out interesting subsets with natural language queries, which then become the datasets HAWK searches over.
 
 ## Project Structure
 
@@ -13,6 +13,12 @@ yfcc-scope
 │   ├── starlette_app.py
 │   ├── yfcc_yolo_to_postgres.py
 │   └── yfcc_yolo_to_postgres-shards-batch_query_metadata.py
+│
+├── clip-embedding/                                  # Compute CLIP embeddings and insert into PostgreSQL
+│   ├── clip_to_postgres.py
+│   ├── yfcc_image_embeddings.npy
+│   ├── yfcc_img_to_clip.ipynb
+│   └── yfcc_img_to_clip.py
 │
 ├── metadata/                                        # Code for converting metadata formats
 │   ├── csv2json.py
@@ -36,7 +42,7 @@ yfcc-scope
 │   └── templates/
 │       └── index.html
 │
-├── yfcc-viewer                                     # Vite + React Viewer app for exploring the indexed data
+├── yfcc-viewer/                                     # Vite + React Viewer app for exploring the indexed data
 │   ├── dist/                                       # Vite build output
 │   ├── src/
 │   │   ├── App.css
