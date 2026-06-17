@@ -22,7 +22,7 @@ def open_conn():
     )
 
 
-def batch_insert_embeddings(cur, batch_data, insert_query):
+def batch_insert_embeddings(conn, cur, batch_data, insert_query):
     try:
         execute_batch(cur, insert_query, batch_data, page_size=100)
         conn.commit()
@@ -61,26 +61,26 @@ if __name__ == "__main__":
     emb = np.load(EMBEDDING_PATH)
 
     insert_query = """
-        INSERT INTO clip_embeddings (image_file_id, clip_embedding)
+        INSERT INTO clip_embeddings (image_file_id, embedding)
         VALUES (%s, %s)
         ON CONFLICT (image_file_id) DO UPDATE
-        SET clip_embedding = EXCLUDED.clip_embedding;
+        SET embedding = EXCLUDED.embedding;
     """
 
     BATCH_SIZE = 1000
     batch_data = []
 
-    for i in tqdm(range(4180000, TOTAL_NUM)):
+    for i in tqdm(range(TOTAL_NUM)):
         image_json = ds[i][".json"]
         image_file_id = f"{image_json['image_id']}_{image_json['image_crc']}"
         batch_data.append((image_file_id, emb[i]))
 
         if len(batch_data) >= BATCH_SIZE:
-            batch_insert_embeddings(cur, batch_data, insert_query)
+            batch_insert_embeddings(conn, cur, batch_data, insert_query)
             batch_data = []
 
     if batch_data:
-        batch_insert_embeddings(cur, batch_data, insert_query)
+        batch_insert_embeddings(conn, cur, batch_data, insert_query)
 
     cur.close()
     conn.close()
