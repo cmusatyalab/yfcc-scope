@@ -2,7 +2,6 @@ import React, { useRef, useState, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { PointerLockControls, Html, Text } from "@react-three/drei";
 import * as THREE from "three";
-import SelectedPanel from "./SelectedPanel";
 import { rowKey } from "./ImageResultsPanel";
 
 // ─── Layout constants ───────────────────────────────────────────────────────
@@ -205,12 +204,12 @@ export default function Gallery({
   toggleSelected,
   onDownloadSelected,
   downloading,
+  showSelectedPanel,
+  setShowSelectedPanel,
 }) {
   const cols = Math.ceil(items.length / 4) || 1;
   const floorLen = cols * FRAME_W + 400;
   const limitX = WALL_X;
-
-  const [showSelectedPanel, setShowSelectedPanel] = useState(false);
 
   const handleShowSelected = () => {
     setShowSelectedPanel(true);
@@ -280,16 +279,6 @@ export default function Gallery({
           />
         ))}
       </Canvas>
-
-      <SelectedPanel
-        showSelectedPanel={showSelectedPanel}
-        setShowSelectedPanel={setShowSelectedPanel}
-        selectedIds={selectedIds}
-        searchResults={searchResults}
-        toggleSelected={toggleSelected}
-        onDownloadSelected={onDownloadSelected}
-        downloading={downloading}
-      />
 
       {/* HUD Info */}
       <div className="gallery-hud">

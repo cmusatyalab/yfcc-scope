@@ -5,6 +5,7 @@ import Gallery, { makeLayout } from "./Gallery";
 import SearchControlPanel from "./SearchControlPanel";
 import SqlDisplayPanel from "./SqlDisplayPanel";
 import ImageResultsPanel, { rowKey } from "./ImageResultsPanel";
+import SelectedPanel from "./SelectedPanel";
 import "./AppImageViewer.css";
 
 // Read API base from env
@@ -19,6 +20,7 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
+  const [showSelectedPanel, setShowSelectedPanel] = useState(false);
 
   useEffect(() => {
     setSelectedIds(new Set());
@@ -81,53 +83,63 @@ export default function App() {
     }
   };
 
-  if (mode === "gallery") {
-    return (
-      <Gallery
-        items={galleryItems}
-        onBack={() => setMode("search")}
-        searchResults={searchResults}
+  return (
+    <div className="image-viewer-root">
+      {mode === "gallery" ? (
+        <Gallery
+          items={galleryItems}
+          onBack={() => setMode("search")}
+          searchResults={searchResults}
+          selectedIds={selectedIds}
+          toggleSelected={toggleSelected}
+          onDownloadSelected={handleDownloadSelected}
+          downloading={downloading}
+          showSelectedPanel={showSelectedPanel}
+          setShowSelectedPanel={setShowSelectedPanel}
+        />
+      ) : (
+        <div className="image-viewer-shell">
+          <h1 className="app-title">3D Library Image Viewer</h1>
+          {error && <p className="error-text">{error}</p>}
+
+          <SearchControlPanel
+            useCoco={useCoco}
+            setUseCoco={setUseCoco}
+            setSqlResult={setSqlResult}
+            setError={setError}
+          />
+
+          <SqlDisplayPanel
+            useCoco={useCoco}
+            setUseCoco={setUseCoco}
+            sqlResult={sqlResult}
+            setSearchResults={setSearchResults}
+            apiBase={API_BASE}
+            setError={setError}
+          />
+
+          <ImageResultsPanel
+            searchResults={searchResults}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+            toggleSelected={toggleSelected}
+            onDownloadSelected={handleDownloadSelected}
+            downloading={downloading}
+            onEnterGallery={handleEnterGallery}
+            apiBase={API_BASE}
+          />
+        </div>
+      )}
+
+      <SelectedPanel
+        showSelectedPanel={showSelectedPanel}
+        setShowSelectedPanel={setShowSelectedPanel}
         selectedIds={selectedIds}
+        searchResults={searchResults}
         toggleSelected={toggleSelected}
         onDownloadSelected={handleDownloadSelected}
         downloading={downloading}
       />
-    );
-  }
-
-  return (
-    <div className="image-viewer-root">
-      <div className="image-viewer-shell">
-        <h1 className="app-title">3D Library Image Viewer</h1>
-        {error && <p className="error-text">{error}</p>}
-
-        <SearchControlPanel
-          useCoco={useCoco}
-          setUseCoco={setUseCoco}
-          setSqlResult={setSqlResult}
-          setError={setError}
-        />
-
-        <SqlDisplayPanel
-          useCoco={useCoco}
-          setUseCoco={setUseCoco}
-          sqlResult={sqlResult}
-          setSearchResults={setSearchResults}
-          apiBase={API_BASE}
-          setError={setError}
-        />
-
-        <ImageResultsPanel
-          searchResults={searchResults}
-          selectedIds={selectedIds}
-          setSelectedIds={setSelectedIds}
-          toggleSelected={toggleSelected}
-          onDownloadSelected={handleDownloadSelected}
-          downloading={downloading}
-          onEnterGallery={handleEnterGallery}
-          apiBase={API_BASE}
-        />
-      </div>
     </div>
   );
 }

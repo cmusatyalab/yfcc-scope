@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import SelectedPanel from "./SelectedPanel";
 
 export function rowKey(row, index) {
   return row?.image_file_id ?? `idx-${index}`;
@@ -140,16 +139,6 @@ export default function ImageResultsPanel({
           </div>
         )}
       </div>
-
-      <SelectedPanel
-        showSelectedPanel={showSelectedPanel}
-        setShowSelectedPanel={setShowSelectedPanel}
-        selectedIds={selectedIds}
-        searchResults={searchResults}
-        toggleSelected={toggleSelected}
-        onDownloadSelected={onDownloadSelected}
-        downloading={downloading}
-      />
     </>
   );
 }
