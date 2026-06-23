@@ -8,11 +8,11 @@ export default function SelectedPanel({
   searchResults,
   toggleSelected,
   onDownloadSelected,
-  downloadLoading,
+  downloading,
 }) {
   if (showSelectedPanel) {
     return (
-      <div 
+      <div
         className="selected-panel"
         onPointerDown={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
@@ -25,7 +25,7 @@ export default function SelectedPanel({
             <button
               className="selected-panel-download"
               onClick={onDownloadSelected}
-              disabled={selectedIds.size === 0 || downloadLoading}
+              disabled={selectedIds.size === 0 || downloading}
               aria-label="Download selected"
               title="Download selected"
             >

@@ -1,32 +1,109 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import buildSystemPrompt from "./sqlPrompt";
 
 export default function SearchControlPanel({
-  apiKey,
-  setApiKey,
-  query,
-  setQuery,
-  limit,
-  setLimit,
-  onGenerate,
-  loading,
-  error,
-  sqlError,
+  useCoco,
+  setUseCoco,
+  setSqlResult,
+  setError,
 }) {
+  const [query, setQuery] = useState("hawk");
+  const [apiKey, setApiKey] = useState("");
+  const [limit, setLimit] = useState(20);
+  const [sqlLoading, setSqlLoading] = useState(false);
+
+  const onGenerate = async () => {
+    if (!query.trim()) return;
+    if (useCoco) {
+      handleOpenAI();
+    } else {
+      // TODO: search clip embedding nearest neighbors
+      setError("");
+    }
+  };
+
+  const handleOpenAI = async () => {
+    if (!query.trim()) return;
+    if (!apiKey.trim()) {
+      setError("Enter an OpenAI API key first.");
+      return;
+    }
+
+    setSqlLoading(true);
+    setSqlResult(null);
+    setError("");
+    // setError("");
+
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey.trim()}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            { role: "system", content: buildSystemPrompt(limit) },
+            { role: "user", content: query },
+          ],
+          temperature: 0,
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "sql_query_response",
+              strict: true,
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  sql: { type: "string" },
+                  explanation: { type: "string" },
+                },
+                required: ["sql", "explanation"],
+              },
+            },
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t);
+      }
+
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content?.trim();
+      if (!content) throw new Error("No structured response returned.");
+
+      const parsed = JSON.parse(content);
+      if (!parsed?.sql || !parsed?.explanation) {
+        throw new Error("Structured response missing sql or explanation.");
+      }
+      setSqlResult(parsed);
+    } catch (e) {
+      setError(e?.message || "OpenAI request failed");
+    } finally {
+      setSqlLoading(false);
+    }
+  };
+
+  const handleClip = () => {};
+
   return (
     <>
-      {error && <p className="error-text">{error}</p>}
-
       <div className="input-row">
-        <label htmlFor="apiKey" className="api-label">
-          OpenAI API Key:
+        <label htmlFor="limit" className="query-label">
+          Search Using:
         </label>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="sk-xxxxxxxx"
-          className="api-input"
-        />
+        <select
+          value={useCoco ? "coco" : "clip"}
+          onChange={(e) => setUseCoco(e.target.value === "coco")}
+          className="limit-select"
+        >
+          <option value="coco">YOLO Detected COCO Classes</option>
+          <option value="clip">CLIP Embedding</option>
+        </select>
       </div>
 
       <div className="input-row">
@@ -39,7 +116,7 @@ export default function SearchControlPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter") onGenerate();
           }}
-          placeholder="cat dog"
+          placeholder="hawk"
           className="query-input"
         />
       </div>
@@ -61,15 +138,32 @@ export default function SearchControlPanel({
         </select>
       </div>
 
+      {useCoco && (
+        <div className="input-row">
+          <label htmlFor="apiKey" className="api-label">
+            OpenAI API Key:
+          </label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-xxxxxxxx"
+            className="api-input"
+          />
+        </div>
+      )}
+
       <button
         onClick={onGenerate}
-        disabled={loading || !query.trim()}
+        disabled={sqlLoading || !query.trim()}
         className="generate-btn"
       >
-        {loading ? "Thinking…" : "Generate SQL"}
+        {useCoco
+          ? sqlLoading
+            ? "Thinking…"
+            : "Generate SQL"
+          : "Search nearest neighbor images"}
       </button>
-
-      {sqlError && <p className="error-text">{sqlError}</p>}
     </>
   );
 }

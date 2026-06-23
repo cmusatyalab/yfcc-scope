@@ -43,7 +43,6 @@
 
 .image-viewer-shell {
   padding: 12px 16px 24px;
-  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -99,7 +98,7 @@
 }
 
 .generate-btn {
-  max-width: 160px;
+  max-width: 280px;
   border-radius: 16px;
   border: 1px solid rgba(167, 139, 250, 0.4);
   background: rgba(167, 139, 250, 0.1);

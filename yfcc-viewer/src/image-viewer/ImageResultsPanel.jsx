@@ -8,18 +8,25 @@ export function rowKey(row, index) {
 export default function ImageResultsPanel({
   searchResults,
   selectedIds,
+  setSelectedIds,
   toggleSelected,
-  onSelectAll,
-  onClearSelection,
   onDownloadSelected,
-  downloadLoading,
-  downloadError,
+  downloading,
   onEnterGallery,
   apiBase,
 }) {
   const baseUrl = apiBase || window.location.origin;
   const [enlargedImage, setEnlargedImage] = useState(null);
   const [showSelectedPanel, setShowSelectedPanel] = useState(false);
+
+  const handleSelectAll = () => {
+    if (!searchResults) return;
+    setSelectedIds(new Set(searchResults.map((row, i) => rowKey(row, i))));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
 
   if (searchResults === null) return null;
 
@@ -29,17 +36,16 @@ export default function ImageResultsPanel({
 
   return (
     <>
-      {downloadError && <p className="error-text">{downloadError}</p>}
       <div className="results-panel">
         <div className="results-header">
           <div className="results-count">{searchResults.length} results</div>
           <div className="results-actions">
-            <button onClick={onSelectAll} className="select-btn">
+            <button onClick={handleSelectAll} className="select-btn">
               Select All
             </button>
 
             <button
-              onClick={onClearSelection}
+              onClick={handleClearSelection}
               className="select-btn"
               disabled={selectedIds.size === 0}
             >
@@ -49,9 +55,9 @@ export default function ImageResultsPanel({
             <button
               onClick={onDownloadSelected}
               className="enter-btn"
-              disabled={selectedIds.size === 0 || downloadLoading}
+              disabled={selectedIds.size === 0 || downloading}
             >
-              {downloadLoading
+              {downloading
                 ? "Preparing ZIP…"
                 : `Download Selected (${selectedIds.size})`}
             </button>
@@ -142,7 +148,7 @@ export default function ImageResultsPanel({
         searchResults={searchResults}
         toggleSelected={toggleSelected}
         onDownloadSelected={onDownloadSelected}
-        downloadLoading={downloadLoading}
+        downloading={downloading}
       />
     </>
   );

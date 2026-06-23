@@ -204,7 +204,7 @@ export default function Gallery({
   selectedIds,
   toggleSelected,
   onDownloadSelected,
-  downloadLoading,
+  downloading,
 }) {
   const cols = Math.ceil(items.length / 4) || 1;
   const floorLen = cols * FRAME_W + 400;
@@ -288,7 +288,7 @@ export default function Gallery({
         searchResults={searchResults}
         toggleSelected={toggleSelected}
         onDownloadSelected={onDownloadSelected}
-        downloadLoading={downloadLoading}
+        downloading={downloading}
       />
 
       {/* HUD Info */}
