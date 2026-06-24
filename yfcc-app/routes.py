@@ -1,37 +1,57 @@
 import datetime
 import json
 import urllib.parse
-from pathlib import Path
-
+import torch
+import open_clip
+import numpy as np
 import requests
+from pathlib import Path
 from PIL import Image, ImageDraw
 from io import BytesIO
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, StreamingResponse, JSONResponse, PlainTextResponse, FileResponse, RedirectResponse
+from starlette.responses import (
+    HTMLResponse,
+    StreamingResponse,
+    JSONResponse,
+    PlainTextResponse,
+    FileResponse,
+    RedirectResponse,
+)
 from starlette.templating import Jinja2Templates
 from stream_zip import stream_zip, ZIP_32
 
 from .constants import LABELS, MAX_LIMIT
+from .utils import build_vector_row
+
 from .db import (
     conf_hist_sync,
     execute_wrapped_query,
     execute_count_query,
     fetch,
     fetch_images_for_labels,
-    open_conn,
+    fetch_paths_by_ids,
     read_images_with_boxes_at_threshold,
     read_label_counts_at_threshold,
     read_total_images_yfcc,
     rebuild_histograms,
     rebuild_vector_table,
     vector_rows_sync,
+    execute_clip_query,
 )
+
 from .log import log
 from .utils import build_vector_row, color_for_label, parse_conf_ranges_0_100, validate_sql
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Load CLIP model and tokenizer once at startup
+_model, _preprocess, _ = open_clip.create_model_and_transforms("ViT-B-32", pretrained="laion2b_s34b_b79k")
+_model.eval()
+_tokenizer = open_clip.get_tokenizer("ViT-B-32")
+_device = "cuda" if torch.cuda.is_available() else "cpu"
+_model = _model.to(_device)
 
 # Define the path to the viewer's dist directory
 viewer_dist_dir = Path(__file__).parent.parent / "yfcc-viewer" / "dist"
@@ -103,9 +123,9 @@ async def home(request: Request):
     img_src = "/image?" + "&".join(img_params) if image_file_id else ""
 
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "image_file_id": image_file_id,
             "all_checked": all_checked,
             "select_all_val": "1" if all_checked else "0",
@@ -161,6 +181,46 @@ async def image(request: Request):
     img.save(buf, "PNG")
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
+
+
+def _compute_text_features(texts):
+    text_input = _tokenizer(texts).to(_device)
+    with torch.no_grad(), torch.autocast(_device):
+        text_feat = _model.encode_text(text_input)
+        text_feat = text_feat / text_feat.norm(dim=-1, keepdim=True)
+    return text_feat.cpu().numpy().astype(np.float16, copy=False)
+
+
+def _do_clip_query(text, limit):
+    text_feat = _compute_text_features([text])[0]
+    embedding_list = text_feat.astype(np.float32).tolist()
+
+    rows = execute_clip_query(text_feat, limit)
+    out_rows = [build_vector_row(image_file_id, path, 0, None) for image_file_id, path in rows]
+
+    return {"embedding": embedding_list, "rows": out_rows}
+
+
+async def clip_text_query(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    text = body.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "text is required"}, status_code=400)
+
+    try:
+        limit = int(body.get("limit", 20))
+    except (ValueError, TypeError):
+        limit = 20
+    limit = max(1, min(1000, limit))
+
+    log.info("clip_text_query received text: %s, limit: %d", text, limit)
+
+    results = await run_in_threadpool(_do_clip_query, text, limit)
+    return JSONResponse(results)
 
 
 async def run_query(request: Request):
@@ -235,16 +295,7 @@ async def download_zip(request: Request):
     log.info(f"download_zip: requested {len(image_ids)} images")
 
     # Get the paths of all requested image IDs in a single DB query
-    id_to_path = {}
-    try:
-        conn = open_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT image_file_id, path FROM yfcc_index WHERE image_file_id = ANY(%s)", (image_ids,))
-            for row in cur.fetchall():
-                id_to_path[row[0]] = row[1]
-        conn.close()
-    except Exception as e:
-        log.error(f"download_zip bulk db fetch failed: {e}")
+    id_to_path = fetch_paths_by_ids(image_ids)
 
     def zip_files():
         dt_now = datetime.datetime.now()

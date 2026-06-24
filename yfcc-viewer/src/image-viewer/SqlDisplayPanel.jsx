@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
 export default function SqlDisplayPanel({
-  useCoco,
-  setUseCoco,
   sqlResult,
   setSearchResults,
   apiBase,

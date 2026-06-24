@@ -4,8 +4,8 @@ import { rowKey } from "./ImageResultsPanel";
 export default function SelectedPanel({
   showSelectedPanel,
   setShowSelectedPanel,
-  selectedIds,
   searchResults,
+  selectedIds,
   toggleSelected,
   onDownloadSelected,
   downloading,

@@ -12,6 +12,7 @@ lerna-debug.log*
 !.vscode/extensions.json
 .ipynb_checkpoints/
 __pycache__/
+.opencode/
 .idea
 .DS_Store
 *.suo

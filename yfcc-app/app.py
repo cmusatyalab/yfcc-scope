@@ -15,15 +15,13 @@ from .routes import (
     recalc_freqs,
     recalc_vectors,
     redirect_to_viewer,
+    clip_text_query,
     run_query,
     run_query_count,
     vector_rows_api,
     viewer_app,
     viewer_index,
 )
-
-setup_logging()
-
 
 app = Starlette(
     routes=[
@@ -37,6 +35,7 @@ app = Starlette(
         Route("/api/images", images_api),
         Route("/api/conf_hist", conf_hist, methods=["GET"]),
         Route("/api/vector_rows", vector_rows_api),
+        Route("/api/clip_text_query", clip_text_query, methods=["POST"]),
         Route("/api/run_query", run_query, methods=["POST"]),
         Route("/api/run_query_count", run_query_count, methods=["POST"]),
         Route("/api/download_zip", download_zip, methods=["POST"]),

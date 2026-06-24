@@ -106,17 +106,19 @@ export default function App() {
             useCoco={useCoco}
             setUseCoco={setUseCoco}
             setSqlResult={setSqlResult}
-            setError={setError}
-          />
-
-          <SqlDisplayPanel
-            useCoco={useCoco}
-            setUseCoco={setUseCoco}
-            sqlResult={sqlResult}
             setSearchResults={setSearchResults}
             apiBase={API_BASE}
             setError={setError}
           />
+
+          {useCoco && (
+            <SqlDisplayPanel
+              sqlResult={sqlResult}
+              setSearchResults={setSearchResults}
+              apiBase={API_BASE}
+              setError={setError}
+            />
+          )}
 
           <ImageResultsPanel
             searchResults={searchResults}
@@ -134,8 +136,8 @@ export default function App() {
       <SelectedPanel
         showSelectedPanel={showSelectedPanel}
         setShowSelectedPanel={setShowSelectedPanel}
-        selectedIds={selectedIds}
         searchResults={searchResults}
+        selectedIds={selectedIds}
         toggleSelected={toggleSelected}
         onDownloadSelected={handleDownloadSelected}
         downloading={downloading}

@@ -5,20 +5,21 @@ export default function SearchControlPanel({
   useCoco,
   setUseCoco,
   setSqlResult,
+  setSearchResults,
+  apiBase,
   setError,
 }) {
   const [query, setQuery] = useState("hawk");
   const [apiKey, setApiKey] = useState("");
   const [limit, setLimit] = useState(20);
-  const [sqlLoading, setSqlLoading] = useState(false);
+  const [reqLoading, setReqLoading] = useState(false);
 
   const onGenerate = async () => {
     if (!query.trim()) return;
     if (useCoco) {
       handleOpenAI();
     } else {
-      // TODO: search clip embedding nearest neighbors
-      setError("");
+      handleClip();
     }
   };
 
@@ -29,10 +30,9 @@ export default function SearchControlPanel({
       return;
     }
 
-    setSqlLoading(true);
+    setReqLoading(true);
     setSqlResult(null);
     setError("");
-    // setError("");
 
     try {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -76,7 +76,7 @@ export default function SearchControlPanel({
       const content = data.choices?.[0]?.message?.content?.trim();
       if (!content) throw new Error("No structured response returned.");
 
-      const parsed = JSON.parse(content);
+      const parsed = JSON.parse(content); // {sql: "...", explanation: "..."}
       if (!parsed?.sql || !parsed?.explanation) {
         throw new Error("Structured response missing sql or explanation.");
       }
@@ -84,11 +84,45 @@ export default function SearchControlPanel({
     } catch (e) {
       setError(e?.message || "OpenAI request failed");
     } finally {
-      setSqlLoading(false);
+      setReqLoading(false);
     }
   };
 
-  const handleClip = () => {};
+  const handleClip = async () => {
+    if (!query.trim()) return;
+
+    setReqLoading(true);
+    setSearchResults(null);
+    setError("");
+
+    try {
+      const res = await fetch(`${apiBase}/api/clip_text_query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: query.trim(), limit: limit }),
+      });
+
+      if (!res.ok) {
+        const t = await res.json();
+        throw new Error(t.error || `Server error (${res.status})`);
+      }
+
+      const data = await res.json(); // {embedding: [...], rows: [...]}
+      const embedding = data?.embedding;
+      const rows = data?.rows;
+
+      if (rows.length === 0) {
+        setSearchResults([]);
+        setError("Query ran but returned 0 results.");
+        return;
+      }
+      setSearchResults(rows);
+    } catch (e) {
+      setError(e?.message || "Run query failed");
+    } finally {
+      setReqLoading(false);
+    }
+  };
 
   return (
     <>
@@ -130,7 +164,7 @@ export default function SearchControlPanel({
           onChange={(e) => setLimit(Number(e.target.value))}
           className="limit-select"
         >
-          {[20, 40, 60, 80, 100, 150].map((n) => (
+          {[20, 40, 60, 80, 100, 150, 200, 300, 400, 500].map((n) => (
             <option key={n} value={n}>
               {n} images
             </option>
@@ -155,11 +189,11 @@ export default function SearchControlPanel({
 
       <button
         onClick={onGenerate}
-        disabled={sqlLoading || !query.trim()}
+        disabled={reqLoading || !query.trim()}
         className="generate-btn"
       >
         {useCoco
-          ? sqlLoading
+          ? reqLoading
             ? "Thinking…"
             : "Generate SQL"
           : "Search nearest neighbor images"}

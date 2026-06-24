@@ -2,8 +2,13 @@ import logging
 
 
 def setup_logging():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    return logging.getLogger("yfcc")
+    logger = logging.getLogger("yfcc")
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
 
 
-log = logging.getLogger("yfcc")
+log = setup_logging()

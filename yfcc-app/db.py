@@ -2,6 +2,7 @@ import os
 import time
 
 import psycopg2
+from pgvector.psycopg2 import register_vector
 
 from .constants import LABELS
 from .log import log
@@ -347,13 +348,9 @@ def execute_wrapped_query(raw_sql: str):
     conn = open_conn()
     try:
         with conn.cursor() as cur:
-            log.info("about to set statement timeout")
             cur.execute("SET statement_timeout TO 30000;")
-            log.info("about to execute wrapped query")
             cur.execute(wrapped_sql)
-            log.info("wrapped query executed")
             rows = cur.fetchall()
-            log.info("fetched %d rows", len(rows))
             return rows
     finally:
         conn.close()
@@ -363,8 +360,43 @@ def execute_count_query(raw_sql: str):
     conn = open_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("SET statement_timeout TO 30000;")
+            cur.execute("SET statement_timeout TO 120000;")
             cur.execute(raw_sql)
+            rows = cur.fetchall()
+            return rows
+    finally:
+        conn.close()
+
+
+def fetch_paths_by_ids(image_ids):
+    conn = open_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT image_file_id, path FROM yfcc_index WHERE image_file_id = ANY(%s)", (image_ids,))
+            return {row[0]: row[1] for row in cur.fetchall()}
+    except Exception as e:
+        log.error("fetch_paths_by_ids failed: %s", e)
+        return {}
+    finally:
+        conn.close()
+
+
+def execute_clip_query(text_feat, limit):
+    conn = open_conn()
+    try:
+        register_vector(conn)
+        with conn.cursor() as cur:
+            cur.execute("SET hnsw.ef_search = 1000;")
+            cur.execute(
+                """
+                SELECT ce.image_file_id, y.path
+                FROM clip_embeddings ce
+                JOIN yfcc_index y ON y.image_file_id = ce.image_file_id
+                ORDER BY ce.embedding <=> %s
+                LIMIT %s;
+                """,
+                (text_feat, limit),
+            )
             rows = cur.fetchall()
             return rows
     finally:
