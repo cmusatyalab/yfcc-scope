@@ -7,6 +7,7 @@ from starlette.staticfiles import StaticFiles
 from .log import setup_logging
 from .routes import (
     conf_hist,
+    clip_image_query,
     download_zip,
     freqs_api,
     home,
@@ -36,6 +37,7 @@ app = Starlette(
         Route("/api/conf_hist", conf_hist, methods=["GET"]),
         Route("/api/vector_rows", vector_rows_api),
         Route("/api/clip_text_query", clip_text_query, methods=["POST"]),
+        Route("/api/clip_image_query", clip_image_query, methods=["POST"]),
         Route("/api/run_query", run_query, methods=["POST"]),
         Route("/api/run_query_count", run_query_count, methods=["POST"]),
         Route("/api/download_zip", download_zip, methods=["POST"]),

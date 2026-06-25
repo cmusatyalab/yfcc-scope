@@ -191,11 +191,23 @@ def _compute_text_features(texts):
     return text_feat.cpu().numpy().astype(np.float16, copy=False)
 
 
-def _do_clip_query(text, limit):
-    text_feat = _compute_text_features([text])[0]
-    embedding_list = text_feat.astype(np.float32).tolist()
+def _compute_image_features(image_bytes):
+    img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    img_tensor = _preprocess(img).unsqueeze(0).to(_device)
+    with torch.no_grad(), torch.autocast(_device):
+        img_feat = _model.encode_image(img_tensor)
+        img_feat = img_feat / img_feat.norm(dim=-1, keepdim=True)
+    return img_feat.cpu().numpy().astype(np.float16, copy=False)
 
-    rows = execute_clip_query(text_feat, limit)
+
+def _do_clip_query(isText, input, limit):
+    if isText:
+        feat = _compute_text_features([input])[0]
+    else:
+        feat = _compute_image_features(input)[0]
+
+    embedding_list = feat.astype(np.float32).tolist()
+    rows = execute_clip_query(feat, limit)
     out_rows = [build_vector_row(image_file_id, path, 0, None) for image_file_id, path in rows]
 
     return {"embedding": embedding_list, "rows": out_rows}
@@ -219,7 +231,35 @@ async def clip_text_query(request: Request):
 
     log.info("clip_text_query received text: %s, limit: %d", text, limit)
 
-    results = await run_in_threadpool(_do_clip_query, text, limit)
+    results = await run_in_threadpool(_do_clip_query, True, text, limit)
+    return JSONResponse(results)
+
+
+async def clip_image_query(request: Request):
+    try:
+        form = await request.form()
+    except Exception:
+        return JSONResponse({"error": "Invalid form data"}, status_code=400)
+
+    image_file = form.get("image")
+    if not image_file:
+        return JSONResponse({"error": "image file is required"}, status_code=400)
+
+    try:
+        limit = int(form.get("limit", "20"))
+    except (ValueError, TypeError):
+        limit = 20
+    limit = max(1, min(1000, limit))
+
+    image_bytes = await image_file.read()
+    log.info(
+        "clip_image_query received image: %s (%d bytes), limit: %d",
+        getattr(image_file, "filename", "unknown"),
+        len(image_bytes),
+        limit,
+    )
+
+    results = await run_in_threadpool(_do_clip_query, False, image_bytes, limit)
     return JSONResponse(results)
 
 
