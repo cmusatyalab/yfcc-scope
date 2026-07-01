@@ -25,34 +25,59 @@ def compute_text_features(texts, model, tokenizer, device=None):
     return text_feat.cpu().numpy().astype(np.float16, copy=False)
 
 
+def query_ivf(cur, text_feat, neighbor_num):
+    cur.execute("LOAD 'pg_hint_plan';")
+    cur.execute("SET ivfflat.probes = 100;")
+
+    start_time = time.time()
+    cur.execute(
+        """
+        /*+ IndexScan(clip_embeddings clip_embeddings_embedding_idx_ivf) */
+        SELECT image_file_id FROM clip_embeddings 
+        ORDER BY embedding <=> %s
+        LIMIT %s;
+        """,
+        (text_feat, neighbor_num),
+    )
+    query_time = time.time() - start_time
+
+    return cur.fetchall(), query_time
+
+
+def query_hnsw(cur, text_feat, neighbor_num):
+    cur.execute("LOAD 'pg_hint_plan';")
+    cur.execute("SET hnsw.ef_search = %s;", (neighbor_num,))
+
+    start_time = time.time()
+    cur.execute(
+        """
+        /*+ IndexScan(clip_embeddings clip_embeddings_embedding_idx_hnsw) */
+        SELECT image_file_id FROM clip_embeddings 
+        ORDER BY embedding <=> %s
+        LIMIT %s;
+        """,
+        (text_feat, neighbor_num),
+    )
+    query_time = time.time() - start_time
+
+    return cur.fetchall(), query_time
+
+
 if __name__ == "__main__":
     model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-32", pretrained="laion2b_s34b_b79k")
     model.eval()
     tokenizer = open_clip.get_tokenizer("ViT-B-32")
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    neighbor_num = input("Enter number of neighbors to retrieve (up to 1000): ")
-
+    neighbor_num = input("Enter number of neighbors to retrieve: ")
     text = input("Enter text query: ")
     text_feat = compute_text_features([text], model, tokenizer, device)[0]
 
     with open_conn() as conn:
         register_vector(conn)
         with conn.cursor() as cur:
-            cur.execute("SET hnsw.ef_search = 1000;")
+            results, query_time = query_ivf(cur, text_feat, int(neighbor_num))
 
-            start_time = time.time()
-            cur.execute(
-                """
-                SELECT image_file_id FROM clip_embeddings 
-                ORDER BY embedding <=> %s
-                LIMIT %s;
-                """,
-                (text_feat, neighbor_num),
-            )
-            query_time = time.time() - start_time
-
-            results = cur.fetchall()
-            image_file_ids = [row[0] for row in results]
-            print(image_file_ids)
-            print(f"Query execution time: {query_time:.4f} seconds")
+    image_file_ids = [row[0] for row in results]
+    print(image_file_ids)
+    print(f"Query execution time: {query_time:.4f} seconds")
