@@ -386,9 +386,11 @@ def execute_clip_query(text_feat, limit):
     try:
         register_vector(conn)
         with conn.cursor() as cur:
-            cur.execute("SET hnsw.ef_search = 1000;")
+            cur.execute("LOAD 'pg_hint_plan';")
+            cur.execute("SET ivfflat.probes = 100;")
             cur.execute(
                 """
+                /*+ IndexScan(ce clip_embeddings_embedding_idx_ivf) */
                 SELECT ce.image_file_id, y.path
                 FROM clip_embeddings ce
                 JOIN yfcc_index y ON y.image_file_id = ce.image_file_id
