@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { getErrorMessage } from "./utils";
 
 export default function ClipSearchPanel({
+  query,
+  setQuery,
   limit,
   apiBase,
   setSearchResults,
   setError,
 }) {
-  const [query, setQuery] = useState("hawk");
   const [inputType, setInputType] = useState("text");
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -29,8 +31,7 @@ export default function ClipSearchPanel({
       });
 
       if (!res.ok) {
-        const t = await res.json();
-        throw new Error(t.error || `Server error (${res.status})`);
+        throw new Error(await getErrorMessage(res));
       }
 
       const data = await res.json();
@@ -67,8 +68,7 @@ export default function ClipSearchPanel({
       });
 
       if (!res.ok) {
-        const t = await res.json();
-        throw new Error(t.error || `Server error (${res.status})`);
+        throw new Error(await getErrorMessage(res));
       }
 
       const data = await res.json();
@@ -100,9 +100,12 @@ export default function ClipSearchPanel({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [imagePreview]);
 
-  const handleFilePick = useCallback((e) => {
-    showFile(e.target.files[0]);
-  }, [showFile]);
+  const handleFilePick = useCallback(
+    (e) => {
+      showFile(e.target.files[0]);
+    },
+    [showFile],
+  );
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -113,16 +116,20 @@ export default function ClipSearchPanel({
     if (dropZoneRef.current) dropZoneRef.current.classList.remove("drag-over");
   }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    if (dropZoneRef.current) dropZoneRef.current.classList.remove("drag-over");
-    showFile(e.dataTransfer.files[0]);
-  }, [showFile]);
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      if (dropZoneRef.current)
+        dropZoneRef.current.classList.remove("drag-over");
+      showFile(e.dataTransfer.files[0]);
+    },
+    [showFile],
+  );
 
   useEffect(() => {
     if (inputType !== "image") return;
     const handler = (e) => {
-      for (const item of (e.clipboardData?.items || [])) {
+      for (const item of e.clipboardData?.items || []) {
         if (item.type.startsWith("image/")) {
           showFile(item.getAsFile());
           break;
@@ -133,15 +140,15 @@ export default function ClipSearchPanel({
     return () => document.removeEventListener("paste", handler);
   }, [inputType, showFile]);
 
-  const isSearchDisabled = reqLoading || (inputType === "image" ? !imageFile : !query.trim());
-  const onGenerate = () => inputType === "image" ? handleClipImage() : handleClip();
+  const isSearchDisabled =
+    reqLoading || (inputType === "image" ? !imageFile : !query.trim());
+  const onGenerate = () =>
+    inputType === "image" ? handleClipImage() : handleClip();
 
   return (
     <>
       <div className="input-row">
-        <label className="query-label">
-          Search Input:
-        </label>
+        <label className="query-label">Search Input:</label>
         <div className="toggle-pill">
           <button
             className={"toggle-btn" + (inputType === "text" ? " active" : "")}
@@ -177,9 +184,7 @@ export default function ClipSearchPanel({
 
       {inputType === "image" && (
         <div className="input-row">
-          <label className="query-label">
-            Upload Image:
-          </label>
+          <label className="query-label">Upload Image:</label>
           <div>
             <div
               className={"upload-zone" + (imagePreview ? " hidden" : "")}
@@ -189,22 +194,40 @@ export default function ClipSearchPanel({
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <p className="upload-title">Drag & drop / Paste from clipboard / Click to browse</p>
+              <p className="upload-title">
+                Drag & drop / Paste from clipboard / Click to browse
+              </p>
               <p className="upload-sub">Supported formats: PNG, JPG, WebP</p>
             </div>
 
             <div className={"preview-area" + (imagePreview ? " visible" : "")}>
-              <img className="preview-thumb" src={imagePreview || ""} alt="preview" />
+              <img
+                className="preview-thumb"
+                src={imagePreview || ""}
+                alt="preview"
+              />
               <div className="preview-meta">
                 <p className="preview-name">{imageFile?.name || ""}</p>
-                <p className="preview-size">{imageFile ? (imageFile.size / 1024).toFixed(0) + " KB · " + imageFile.type : ""}</p>
+                <p className="preview-size">
+                  {imageFile
+                    ? (imageFile.size / 1024).toFixed(0) +
+                      " KB · " +
+                      imageFile.type
+                    : ""}
+                </p>
               </div>
               <button className="preview-clear" onClick={clearImage}>
                 Clear
               </button>
             </div>
 
-            <input type="file" ref={fileInputRef} accept="image/*" style={{ display: "none" }} onChange={handleFilePick} />
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handleFilePick}
+            />
           </div>
         </div>
       )}

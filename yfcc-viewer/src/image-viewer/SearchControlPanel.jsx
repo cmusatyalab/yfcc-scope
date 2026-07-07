@@ -3,6 +3,8 @@ import CocoSearchPanel from "./CocoSearchPanel";
 import ClipSearchPanel from "./ClipSearchPanel";
 
 export default function SearchControlPanel({
+  query,
+  setQuery,
   useCoco,
   setUseCoco,
   setSqlResult,
@@ -47,12 +49,16 @@ export default function SearchControlPanel({
 
       {useCoco ? (
         <CocoSearchPanel
+          query={query}
+          setQuery={setQuery}
           limit={limit}
           setSqlResult={setSqlResult}
           setError={setError}
         />
       ) : (
         <ClipSearchPanel
+          query={query}
+          setQuery={setQuery}
           limit={limit}
           apiBase={apiBase}
           setSearchResults={setSearchResults}

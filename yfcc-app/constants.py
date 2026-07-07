@@ -17,3 +17,5 @@ BLOCKED_KEYWORDS = [
 ]
 
 MAX_LIMIT = 500
+
+SCOPE_BASE = "http://cloudlet032.elijah.cs.cmu.edu:5000"

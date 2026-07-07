@@ -356,11 +356,10 @@ def execute_wrapped_query(raw_sql: str):
         conn.close()
 
 
-def execute_count_query(raw_sql: str):
+def execute_query(raw_sql: str):
     conn = open_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("SET statement_timeout TO 120000;")
             cur.execute(raw_sql)
             rows = cur.fetchall()
             return rows

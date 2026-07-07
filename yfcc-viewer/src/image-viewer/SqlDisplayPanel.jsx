@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
+import { getErrorMessage } from "./utils";
 
 export default function SqlDisplayPanel({
+  query,
   sqlResult,
   setSearchResults,
   apiBase,
@@ -10,15 +12,20 @@ export default function SqlDisplayPanel({
   const [draftSQL, setDraftSQL] = useState(editableSQL);
   const [isEditingSQL, setIsEditingSQL] = useState(false);
   const [queryRunLoading, setQueryRunLoading] = useState(false);
+  const [createScopeLoading, setCreateScopeLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(null);
   const [countLoading, setCountLoading] = useState(false);
   const lastCountSqlRef = useRef("");
 
-  const buildCountSql = (sql) => {
-    const sqlWithoutLimit = sql
+  const buildSqlWithoutLimit = (sql) => {
+    return sql
       .replace(/LIMIT\s+\d+/i, "")
       .replace(/;+$/, "")
       .trim();
+  };
+
+  const buildCountSql = (sql) => {
+    const sqlWithoutLimit = buildSqlWithoutLimit(sql);
     return `SELECT COUNT(*) as count FROM (${sqlWithoutLimit}) AS subquery`;
   };
 
@@ -50,7 +57,7 @@ export default function SqlDisplayPanel({
         });
 
         if (!res.ok) {
-          throw new Error(`Server error (${res.status})`);
+          throw new Error(`Server error: ${await getErrorMessage(res)}`);
         }
 
         const data = await res.json();
@@ -107,8 +114,7 @@ export default function SqlDisplayPanel({
       });
 
       if (!res.ok) {
-        const t = await res.json();
-        throw new Error(t.error || `Server error (${res.status})`);
+        throw new Error(`Server error: ${await getErrorMessage(res)}`);
       }
 
       const data = await res.json();
@@ -128,82 +134,119 @@ export default function SqlDisplayPanel({
     }
   };
 
+  const handleCreateScope = async () => {
+    if (!editableSQL?.trim()) return;
+    setCreateScopeLoading(true);
+    setError("");
+
+    const scopeSql = buildSqlWithoutLimit(editableSQL);
+    try {
+      const res = await fetch(`${apiBase}/api/create_scope`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sql: scopeSql, query: query }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server error: ${await getErrorMessage(res)}`);
+      }
+
+      const data = await res.json();
+      const message = data.message;
+      setError(message);
+    } catch (e) {
+      setError(e?.message || "Run query failed");
+    } finally {
+      setCreateScopeLoading(false);
+    }
+  };
+
   if (!sqlResult) return null;
 
   return (
     <div className="sql-panel">
-      <div className="sql-stack">
-        <div className="sql-card">
-          <div className="sql-card-header">
-            <div className="sql-card-title">SQL</div>
-            <div className="sql-edit-actions">
-              {isEditingSQL && (
-                <button
-                  onClick={handleCancelEdit}
-                  className="sql-edit-btn"
-                  title="Cancel"
-                >
-                  ❌ Cancel
-                </button>
-              )}
+      <div className="sql-card">
+        <div className="sql-card-header">
+          <div className="sql-card-title">SQL</div>
+          <div className="sql-edit-actions">
+            {isEditingSQL && (
               <button
-                onClick={handleToggleEdit}
+                onClick={handleCancelEdit}
                 className="sql-edit-btn"
-                title="Edit SQL"
+                title="Cancel"
               >
-                {isEditingSQL ? "💾 Save" : "✏️ Edit"}
+                ❌ Cancel
               </button>
-            </div>
+            )}
+            <button
+              onClick={handleToggleEdit}
+              className="sql-edit-btn"
+              title="Edit SQL"
+            >
+              {isEditingSQL ? "💾 Save" : "✏️ Edit"}
+            </button>
           </div>
-
-          {isEditingSQL ? (
-            <textarea
-              value={draftSQL}
-              onChange={(e) => setDraftSQL(e.target.value)}
-              className="sql-textarea"
-            />
-          ) : (
-            <pre className="sql-pre">{editableSQL}</pre>
-          )}
         </div>
 
-        {sqlResult.explanation && (
-          <div className="reasoning-card">
-            <div
-              className="reasoning-title"
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span>REASONING</span>
-              <span
-                className={
-                  countLoading
-                    ? "reasoning-count-badge is-loading"
-                    : "reasoning-count-badge"
-                }
-              >
-                {countLoading
-                  ? "Counting total matches..."
-                  : totalCount !== null
-                    ? `Total Matches: ${totalCount}`
-                    : "Total Matches: --"}
-              </span>
-            </div>
-            <div className="reasoning-text">{sqlResult.explanation}</div>
-          </div>
+        {isEditingSQL ? (
+          <textarea
+            value={draftSQL}
+            onChange={(e) => setDraftSQL(e.target.value)}
+            className="sql-textarea"
+          />
+        ) : (
+          <pre className="sql-pre">{editableSQL}</pre>
         )}
       </div>
 
-      <button
-        onClick={handleRunQuery}
-        disabled={queryRunLoading}
-        className="run-btn"
-      >
-        {queryRunLoading ? "Running…" : "▶ Run Query on Database"}
-      </button>
+      {sqlResult.explanation && (
+        <div className="reasoning-card">
+          <div
+            className="reasoning-title"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span>REASONING</span>
+            <span
+              className={
+                countLoading
+                  ? "reasoning-count-badge is-loading"
+                  : "reasoning-count-badge"
+              }
+            >
+              {countLoading
+                ? "Counting total matches..."
+                : totalCount !== null
+                  ? `Total Matches: ${totalCount}`
+                  : "Total Matches: --"}
+            </span>
+          </div>
+          <div className="reasoning-text">{sqlResult.explanation}</div>
+        </div>
+      )}
+
+      <div className="sql-actions">
+        <button
+          onClick={handleRunQuery}
+          disabled={queryRunLoading}
+          className="run-btn"
+        >
+          {queryRunLoading ? "Running…" : "▶ Run Query on Database"}
+        </button>
+
+        <button
+          onClick={handleCreateScope}
+          disabled={createScopeLoading}
+          className="run-btn"
+        >
+          {createScopeLoading
+            ? "Creating Scope…"
+            : "🗂 Create Scope from Query"}
+        </button>
+      </div>
     </div>
   );
 }

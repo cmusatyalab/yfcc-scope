@@ -59,6 +59,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  margin-bottom: 16px;
 }
 
 .input-row {
@@ -255,14 +256,11 @@
 }
 
 .sql-panel {
-  width: 50%;
-  margin-bottom: 16px;
-}
-
-.sql-stack {
   display: flex;
   flex-direction: column;
+  width: 50%;
   gap: 16px;
+  margin-bottom: 16px;
 }
 
 .sql-card {
@@ -355,7 +353,14 @@
   line-height: 1.5;
 }
 
+.sql-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .run-btn {
+  width: 280px;
   margin-top: 16px;
   border-radius: 16px;
   border: 1px solid rgba(52, 211, 153, 0.4);

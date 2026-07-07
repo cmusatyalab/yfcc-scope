@@ -21,13 +21,13 @@ from starlette.responses import (
 from starlette.templating import Jinja2Templates
 from stream_zip import stream_zip, ZIP_32
 
-from .constants import LABELS, MAX_LIMIT
+from .constants import LABELS, MAX_LIMIT, SCOPE_BASE
 from .utils import build_vector_row
 
 from .db import (
     conf_hist_sync,
     execute_wrapped_query,
-    execute_count_query,
+    execute_query,
     fetch,
     fetch_images_for_labels,
     fetch_paths_by_ids,
@@ -41,7 +41,7 @@ from .db import (
 )
 
 from .log import log
-from .utils import build_vector_row, color_for_label, parse_conf_ranges_0_100, validate_sql
+from .utils import build_vector_row, color_for_label, parse_conf_ranges_0_100, validate_sql, sanitize_scope_name
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -302,15 +302,54 @@ async def run_query_count(request: Request):
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-    log.info("run_query_count received SQL: %s", raw_sql)
+    log.info("run_query_count received SQL: \n%s", raw_sql)
 
     try:
-        rows = await run_in_threadpool(execute_count_query, raw_sql)
+        rows = await run_in_threadpool(execute_query, raw_sql)
     except Exception as e:
         log.error("run_query_count failed: %s\nSQL: %s", e, raw_sql)
         return JSONResponse({"error": f"Query failed: {e}"}, status_code=400)
 
     return JSONResponse({"rows": [{"count": r[0]} for r in rows]})
+
+
+async def create_scope(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    try:
+        query = body.get("query")
+        scope_name = sanitize_scope_name(query)
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    try:
+        raw_sql = validate_sql(body.get("sql"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    log.info("create_scope received query: %s, scope name: %s, SQL: \n%s", query, scope_name, raw_sql)
+
+    rows = await run_in_threadpool(execute_query, raw_sql)
+    obj_keys = [str(row[0]).split("_", 1)[0] for row in rows if row[0]]
+    body = "\n".join(obj_keys) + "\n"
+
+    import os
+
+    resp = requests.post(
+        f"{SCOPE_BASE}/{scope_name}.scope",
+        headers={"X-API-Key": os.environ.get("SCOPE_API_KEY", "")},
+        data=body,
+    )
+
+    if resp.status_code == 204:
+        return JSONResponse(content={"message": "Scope created successfully"}, status_code=200)
+    if resp.status_code == 409:
+        return JSONResponse(content={"error": "Scope already exists"}, status_code=resp.status_code)
+
+    return JSONResponse(content={"error": f"Unable to process scope list"}, status_code=resp.status_code)
 
 
 async def download_zip(request: Request):

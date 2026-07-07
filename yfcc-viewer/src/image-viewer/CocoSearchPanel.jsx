@@ -1,12 +1,14 @@
 import React, { useState } from "react";
+import { getErrorMessage } from "./utils";
 import buildSystemPrompt from "./sqlPrompt";
 
 export default function CocoSearchPanel({
+  query,
+  setQuery,
   limit,
   setSqlResult,
   setError,
 }) {
-  const [query, setQuery] = useState("hawk");
   const [apiKey, setApiKey] = useState("");
   const [reqLoading, setReqLoading] = useState(false);
 
@@ -55,8 +57,7 @@ export default function CocoSearchPanel({
       });
 
       if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t);
+        throw new Error(await getErrorMessage(res));
       }
 
       const data = await res.json();
@@ -95,9 +96,7 @@ export default function CocoSearchPanel({
       </div>
 
       <div className="input-row">
-        <label className="api-label">
-          OpenAI API Key:
-        </label>
+        <label className="api-label">OpenAI API Key:</label>
         <input
           type="password"
           value={apiKey}

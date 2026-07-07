@@ -1,6 +1,10 @@
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path(__file__).parent / ".env")
+
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
-from pathlib import Path
 from starlette.routing import Route
 from starlette.staticfiles import StaticFiles
 
@@ -19,6 +23,7 @@ from .routes import (
     clip_text_query,
     run_query,
     run_query_count,
+    create_scope,
     vector_rows_api,
     viewer_app,
     viewer_index,
@@ -40,6 +45,7 @@ app = Starlette(
         Route("/api/clip_image_query", clip_image_query, methods=["POST"]),
         Route("/api/run_query", run_query, methods=["POST"]),
         Route("/api/run_query_count", run_query_count, methods=["POST"]),
+        Route("/api/create_scope", create_scope, methods=["POST"]),
         Route("/api/download_zip", download_zip, methods=["POST"]),
         Route("/freqs", freqs_api),
         Route("/recalc", recalc_freqs, methods=["POST"]),

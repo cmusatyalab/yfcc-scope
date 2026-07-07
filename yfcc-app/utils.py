@@ -81,6 +81,15 @@ def validate_sql(raw_sql: str):
     return sql
 
 
+def sanitize_scope_name(query: str) -> str:
+    import unicodedata
+
+    s = unicodedata.normalize("NFKC", query or "").strip().lower()
+    s = re.sub(r"[^a-z0-9_-]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s).strip("-_")
+    return s[:64] or "scope"
+
+
 def build_vector_row(image_file_id, path, total_bboxes, counts_json):
     counts = counts_json or {}
     item = {

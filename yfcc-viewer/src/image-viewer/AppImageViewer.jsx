@@ -13,6 +13,7 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export default function App() {
   const [mode, setMode] = useState("search");
+  const [query, setQuery] = useState("hawk");
   const [useCoco, setUseCoco] = useState(true);
   const [sqlResult, setSqlResult] = useState(null);
   const [searchResults, setSearchResults] = useState(null);
@@ -103,6 +104,8 @@ export default function App() {
           {error && <p className="error-text">{error}</p>}
 
           <SearchControlPanel
+            query={query}
+            setQuery={setQuery}
             useCoco={useCoco}
             setUseCoco={setUseCoco}
             setSqlResult={setSqlResult}
@@ -113,6 +116,7 @@ export default function App() {
 
           {useCoco && (
             <SqlDisplayPanel
+              query={query}
               sqlResult={sqlResult}
               setSearchResults={setSearchResults}
               apiBase={API_BASE}
