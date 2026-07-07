@@ -141,7 +141,7 @@ export default function SqlDisplayPanel({
 
     const scopeSql = buildSqlWithoutLimit(editableSQL);
     try {
-      const res = await fetch(`${apiBase}/api/create_scope`, {
+      const res = await fetch(`${apiBase}/api/create_scope_coco`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sql: scopeSql, query: query }),

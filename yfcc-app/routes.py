@@ -188,7 +188,7 @@ def _compute_text_features(texts):
     with torch.no_grad(), torch.autocast(_device):
         text_feat = _model.encode_text(text_input)
         text_feat = text_feat / text_feat.norm(dim=-1, keepdim=True)
-    return text_feat.cpu().numpy().astype(np.float16, copy=False)
+    return text_feat.float().cpu().numpy().astype(np.float16, copy=False)
 
 
 def _compute_image_features(image_bytes):
@@ -197,7 +197,7 @@ def _compute_image_features(image_bytes):
     with torch.no_grad(), torch.autocast(_device):
         img_feat = _model.encode_image(img_tensor)
         img_feat = img_feat / img_feat.norm(dim=-1, keepdim=True)
-    return img_feat.cpu().numpy().astype(np.float16, copy=False)
+    return img_feat.float().cpu().numpy().astype(np.float16, copy=False)
 
 
 def _do_clip_query(isText, input, limit):
@@ -313,7 +313,7 @@ async def run_query_count(request: Request):
     return JSONResponse({"rows": [{"count": r[0]} for r in rows]})
 
 
-async def create_scope(request: Request):
+async def create_scope_coco(request: Request):
     try:
         body = await request.json()
     except Exception:

@@ -31,3 +31,6 @@ dist-ssr/
 
 # Large files
 *.npy
+
+# Secrets
+.env
