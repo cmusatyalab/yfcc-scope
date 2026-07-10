@@ -37,7 +37,8 @@ from .db import (
     rebuild_histograms,
     rebuild_vector_table,
     vector_rows_sync,
-    execute_clip_query,
+    search_clip_images,
+    search_clip_ids,
 )
 
 from .log import log
@@ -200,14 +201,19 @@ def _compute_image_features(image_bytes):
     return img_feat.float().cpu().numpy().astype(np.float16, copy=False)
 
 
-def _do_clip_query(isText, input, limit):
-    if isText:
-        feat = _compute_text_features([input])[0]
+def _compute_clip_query(is_text, source, limit, search_fn):
+    if is_text:
+        feat = _compute_text_features([source])[0]
     else:
-        feat = _compute_image_features(input)[0]
+        feat = _compute_image_features(source)[0]
 
     embedding_list = feat.astype(np.float32).tolist()
-    rows = execute_clip_query(feat, limit)
+    rows = search_fn(feat, limit)
+    return feat, embedding_list, rows
+
+
+def _do_clip_query(is_text, source, limit):
+    _, embedding_list, rows = _compute_clip_query(is_text, source, limit, search_clip_images)
     out_rows = [build_vector_row(image_file_id, path, 0, None) for image_file_id, path in rows]
 
     return {"embedding": embedding_list, "rows": out_rows}
@@ -313,6 +319,38 @@ async def run_query_count(request: Request):
     return JSONResponse({"rows": [{"count": r[0]} for r in rows]})
 
 
+def _do_clip_scope_query(is_text, source, limit):
+    _, _, rows = _compute_clip_query(is_text, source, limit, search_clip_ids)
+    image_ids = [str(row[0].split("_", 1)[0]) for row in rows if row[0]]
+    return image_ids
+
+
+def _scope_body_from_ids(image_ids):
+    if not image_ids:
+        return ""
+    return "\n".join(image_ids) + "\n"
+
+
+def _publish_scope(scope_name, image_ids):
+    body = _scope_body_from_ids(image_ids)
+    if not body:
+        return JSONResponse({"error": "No IDs found"}, status_code=404)
+
+    import os
+
+    resp = requests.post(
+        f"{SCOPE_BASE}/{scope_name}.scope",
+        headers={"X-API-Key": os.environ.get("SCOPE_API_KEY", "")},
+        data=body,
+    )
+
+    message = resp.text.strip() or resp.reason
+    payload = {"message": message}
+    if resp.status_code >= 400:
+        payload["error"] = message
+    return JSONResponse(content=payload, status_code=resp.status_code)
+
+
 async def create_scope_coco(request: Request):
     try:
         body = await request.json()
@@ -334,22 +372,65 @@ async def create_scope_coco(request: Request):
 
     rows = await run_in_threadpool(execute_query, raw_sql)
     obj_keys = [str(row[0]).split("_", 1)[0] for row in rows if row[0]]
-    body = "\n".join(obj_keys) + "\n"
+    return _publish_scope(scope_name, obj_keys)
 
-    import os
 
-    resp = requests.post(
-        f"{SCOPE_BASE}/{scope_name}.scope",
-        headers={"X-API-Key": os.environ.get("SCOPE_API_KEY", "")},
-        data=body,
+async def create_scope_clip_text(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    try:
+        size = int(body.get("size", 200000))
+        query = body.get("query")
+        scope_name = sanitize_scope_name(query)
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    log.info(
+        "create_scope_clip_text received query: %s, size: %d",
+        query,
+        size,
     )
 
-    if resp.status_code == 204:
-        return JSONResponse(content={"message": "Scope created successfully"}, status_code=200)
-    if resp.status_code == 409:
-        return JSONResponse(content={"error": "Scope already exists"}, status_code=resp.status_code)
+    image_ids = await run_in_threadpool(_do_clip_scope_query, True, query, size)
+    log.info("create_scope_clip_image found %d image IDs", len(image_ids))
+    return _publish_scope(scope_name, image_ids)
 
-    return JSONResponse(content={"error": f"Unable to process scope list"}, status_code=resp.status_code)
+
+async def create_scope_clip_image(request: Request):
+    try:
+        form = await request.form()
+    except Exception:
+        return JSONResponse({"error": "Invalid form data"}, status_code=400)
+
+    image_file = form.get("image")
+    if not image_file:
+        return JSONResponse({"error": "image file is required"}, status_code=400)
+
+    name = (form.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"error": "name is required"}, status_code=400)
+
+    try:
+        size = int(form.get("size", 200000))
+    except (ValueError, TypeError):
+        size = 200000
+    size = max(1, min(200000, size))
+
+    scope_name = sanitize_scope_name(name)
+    image_bytes = await image_file.read()
+    log.info(
+        "create_scope_clip_image received image: %s (%d bytes), size: %d",
+        getattr(image_file, "filename", "unknown"),
+        len(image_bytes),
+        size,
+    )
+
+    image_ids = await run_in_threadpool(_do_clip_scope_query, False, image_bytes, size)
+    log.info("create_scope_clip_image found %d image IDs", len(image_ids))
+    return _publish_scope(scope_name, image_ids)
 
 
 async def download_zip(request: Request):

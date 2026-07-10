@@ -81,9 +81,7 @@ export default function CocoSearchPanel({
   return (
     <>
       <div className="input-row">
-        <label htmlFor="query" className="query-label">
-          Image Search Query:
-        </label>
+        <label className="query-label">Image Search Query:</label>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -106,13 +104,15 @@ export default function CocoSearchPanel({
         />
       </div>
 
-      <button
-        onClick={handleOpenAI}
-        disabled={isSearchDisabled}
-        className="generate-btn"
-      >
-        {reqLoading ? "Thinking…" : "Generate SQL"}
-      </button>
+      <div className="btn-row">
+        <button
+          onClick={handleOpenAI}
+          disabled={isSearchDisabled}
+          className="generate-btn"
+        >
+          {reqLoading ? "Thinking…" : "Generate SQL"}
+        </button>
+      </div>
     </>
   );
 }

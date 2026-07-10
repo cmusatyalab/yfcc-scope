@@ -13,16 +13,14 @@ export default function ClipSearchPanel({
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [reqLoading, setReqLoading] = useState(false);
+  const [createScope, setCreateScope] = useState(false);
+  const [scopeSize, setScopeSize] = useState(200000);
+  const [scopeName, setScopeName] = useState("");
+  const [createScopeLoading, setCreateScopeLoading] = useState(false);
   const fileInputRef = useRef(null);
   const dropZoneRef = useRef(null);
 
-  const handleClip = async () => {
-    if (!query.trim()) return;
-
-    setReqLoading(true);
-    setSearchResults(null);
-    setError("");
-
+  const handleClipText = async () => {
     try {
       const res = await fetch(`${apiBase}/api/clip_text_query`, {
         method: "POST",
@@ -51,12 +49,6 @@ export default function ClipSearchPanel({
   };
 
   const handleClipImage = async () => {
-    if (!imageFile) return;
-
-    setReqLoading(true);
-    setSearchResults(null);
-    setError("");
-
     try {
       const formData = new FormData();
       formData.append("image", imageFile);
@@ -85,6 +77,70 @@ export default function ClipSearchPanel({
     } finally {
       setReqLoading(false);
     }
+  };
+
+  const isSearchDisabled =
+    reqLoading || (inputType === "image" ? !imageFile : !query.trim());
+
+  const onSearch = () => {
+    if (isSearchDisabled) return;
+
+    setReqLoading(true);
+    setSearchResults(null);
+    setError("");
+
+    inputType === "image" ? handleClipImage() : handleClipText();
+  };
+
+  const handleScopeRequest = async (requestFn, fallbackMessage) => {
+    try {
+      const res = await requestFn();
+
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res));
+      }
+
+      const data = await res.json();
+      setError(data.message || fallbackMessage);
+    } catch (e) {
+      setError(e.message || "Create scope failed");
+    } finally {
+      setCreateScopeLoading(false);
+    }
+  };
+
+  const handleScopeText = () =>
+    handleScopeRequest(() => {
+      return fetch(`${apiBase}/api/create_scope_clip_text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: query.trim(), size: scopeSize }),
+      });
+    }, "Scope created successfully");
+
+  const handleScopeImage = () =>
+    handleScopeRequest(() => {
+      const formData = new FormData();
+      formData.append("image", imageFile);
+      formData.append("size", String(scopeSize));
+      formData.append("name", scopeName.trim());
+
+      return fetch(`${apiBase}/api/create_scope_clip_image`, {
+        method: "POST",
+        body: formData,
+      });
+    }, "Scope created successfully");
+
+  const isScopeDisabled =
+    createScopeLoading ||
+    (inputType === "image" ? !(imageFile && scopeName.trim()) : !query.trim());
+
+  const onCreateScope = async () => {
+    if (isScopeDisabled) return;
+    setCreateScopeLoading(true);
+    setError("");
+
+    await (inputType === "image" ? handleScopeImage() : handleScopeText());
   };
 
   const showFile = useCallback((file) => {
@@ -140,11 +196,6 @@ export default function ClipSearchPanel({
     return () => document.removeEventListener("paste", handler);
   }, [inputType, showFile]);
 
-  const isSearchDisabled =
-    reqLoading || (inputType === "image" ? !imageFile : !query.trim());
-  const onGenerate = () =>
-    inputType === "image" ? handleClipImage() : handleClip();
-
   return (
     <>
       <div className="input-row">
@@ -167,14 +218,12 @@ export default function ClipSearchPanel({
 
       {inputType === "text" && (
         <div className="input-row">
-          <label htmlFor="query" className="query-label">
-            Image Search Query:
-          </label>
+          <label className="query-label">Image Search Query:</label>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onGenerate();
+              if (e.key === "Enter") onSearch();
             }}
             placeholder="e.g. red tailed hawk"
             className="query-input"
@@ -186,40 +235,44 @@ export default function ClipSearchPanel({
         <div className="input-row">
           <label className="query-label">Upload Image:</label>
           <div>
-            <div
-              className={"upload-zone" + (imagePreview ? " hidden" : "")}
-              ref={dropZoneRef}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <p className="upload-title">
-                Drag & drop / Paste from clipboard / Click to browse
-              </p>
-              <p className="upload-sub">Supported formats: PNG, JPG, WebP</p>
-            </div>
-
-            <div className={"preview-area" + (imagePreview ? " visible" : "")}>
-              <img
-                className="preview-thumb"
-                src={imagePreview || ""}
-                alt="preview"
-              />
-              <div className="preview-meta">
-                <p className="preview-name">{imageFile?.name || ""}</p>
-                <p className="preview-size">
-                  {imageFile
-                    ? (imageFile.size / 1024).toFixed(0) +
-                      " KB · " +
-                      imageFile.type
-                    : ""}
+            {!imagePreview && (
+              <div
+                className={"upload-zone" + (imagePreview ? " hidden" : "")}
+                ref={dropZoneRef}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <p className="upload-title">
+                  Drag & drop / Paste from clipboard / Click to browse
                 </p>
+                <p className="upload-sub">Supported formats: PNG, JPG, WebP</p>
               </div>
-              <button className="preview-clear" onClick={clearImage}>
-                Clear
-              </button>
-            </div>
+            )}
+
+            {imagePreview && (
+              <div className="preview-area">
+                <img
+                  className="preview-thumb"
+                  src={imagePreview}
+                  alt="preview"
+                />
+                <div className="preview-meta">
+                  <p className="preview-name">{imageFile?.name || ""}</p>
+                  <p className="preview-size">
+                    {imageFile
+                      ? (imageFile.size / 1024).toFixed(0) +
+                        " KB · " +
+                        imageFile.type
+                      : ""}
+                  </p>
+                </div>
+                <button className="preview-clear" onClick={clearImage}>
+                  Clear
+                </button>
+              </div>
+            )}
 
             <input
               type="file"
@@ -232,13 +285,66 @@ export default function ClipSearchPanel({
         </div>
       )}
 
-      <button
-        onClick={onGenerate}
-        disabled={isSearchDisabled}
-        className="generate-btn"
-      >
-        {reqLoading ? "Searching…" : "Search nearest neighbor images"}
-      </button>
+      <div className="input-row">
+        <label>Create scope</label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={createScope}
+          className={"toggle-switch" + (createScope ? " on" : "")}
+          onClick={() => setCreateScope((v) => !v)}
+        >
+          <span className="toggle-knob" />
+        </button>
+      </div>
+
+      {createScope && (
+        <div className="input-row">
+          <label>Scope size:</label>
+          <select
+            id="scopeCount"
+            value={scopeSize}
+            onChange={(e) => setScopeSize(Number(e.target.value))}
+            className="dropdown-select"
+          >
+            <option value={200000}>200,000 images</option>
+            <option value={300000}>300,000 images</option>
+            <option value={400000}>400,000 images</option>
+            <option value={500000}>500,000 images</option>
+          </select>
+        </div>
+      )}
+
+      {createScope && inputType === "image" && (
+        <div className="input-row">
+          <label className="query-label">Scope Name:</label>
+          <input
+            value={scopeName}
+            onChange={(e) => setScopeName(e.target.value)}
+            className="query-input"
+          />
+        </div>
+      )}
+
+      <div className="btn-row">
+        <button
+          onClick={onSearch}
+          disabled={isSearchDisabled}
+          className="run-btn"
+        >
+          {reqLoading ? "Searching..." : "Search nearest neighbor images"}
+        </button>
+
+        {createScope && (
+          <button
+            onClick={onCreateScope}
+            disabled={isScopeDisabled}
+            className="run-btn"
+          >
+            {createScopeLoading ? "Creating..." : "Create scope"}
+          </button>
+        )}
+      </div>
     </>
   );
 }

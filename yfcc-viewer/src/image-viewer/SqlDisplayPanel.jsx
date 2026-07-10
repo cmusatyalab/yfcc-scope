@@ -100,8 +100,10 @@ export default function SqlDisplayPanel({
     setIsEditingSQL(false);
   };
 
+  const isRunQueryDisabled = !editableSQL.trim() || queryRunLoading;
+
   const handleRunQuery = async () => {
-    if (!editableSQL?.trim()) return;
+    if (isRunQueryDisabled) return;
 
     setQueryRunLoading(true);
     setError("");
@@ -134,8 +136,10 @@ export default function SqlDisplayPanel({
     }
   };
 
+  const isScopeDisabled = !editableSQL.trim() || createScopeLoading;
+
   const handleCreateScope = async () => {
-    if (!editableSQL?.trim()) return;
+    if (isScopeDisabled) return;
     setCreateScopeLoading(true);
     setError("");
 
@@ -228,10 +232,10 @@ export default function SqlDisplayPanel({
         </div>
       )}
 
-      <div className="sql-actions">
+      <div className="btn-row">
         <button
           onClick={handleRunQuery}
-          disabled={queryRunLoading}
+          disabled={isRunQueryDisabled}
           className="run-btn"
         >
           {queryRunLoading ? "Running…" : "▶ Run Query on Database"}
@@ -239,7 +243,7 @@ export default function SqlDisplayPanel({
 
         <button
           onClick={handleCreateScope}
-          disabled={createScopeLoading}
+          disabled={isScopeDisabled}
           className="run-btn"
         >
           {createScopeLoading

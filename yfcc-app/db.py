@@ -380,7 +380,7 @@ def fetch_paths_by_ids(image_ids):
         conn.close()
 
 
-def execute_clip_query(text_feat, limit):
+def search_clip_images(text_feat, limit):
     conn = open_conn()
     try:
         register_vector(conn)
@@ -394,6 +394,27 @@ def execute_clip_query(text_feat, limit):
                 FROM clip_embeddings ce
                 JOIN yfcc_index y ON y.image_file_id = ce.image_file_id
                 ORDER BY ce.embedding <=> %s
+                LIMIT %s;
+                """,
+                (text_feat, limit),
+            )
+            rows = cur.fetchall()
+            return rows
+    finally:
+        conn.close()
+
+def search_clip_ids(text_feat, limit):
+    conn = open_conn()
+    try:
+        register_vector(conn)
+        with conn.cursor() as cur:
+            cur.execute("LOAD 'pg_hint_plan';")
+            cur.execute("SET ivfflat.probes = 500;")
+            cur.execute(
+                """
+                /*+ IndexScan(clip_embeddings clip_embeddings_embedding_idx_ivf) */
+                SELECT image_file_id FROM clip_embeddings 
+                ORDER BY embedding <=> %s
                 LIMIT %s;
                 """,
                 (text_feat, limit),

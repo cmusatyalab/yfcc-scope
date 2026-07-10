@@ -101,7 +101,7 @@
   cursor: pointer;
   border: none;
   background: transparent;
-  color: #7a7a74;
+  color: #7a7a7a;
   transition: all 0.15s;
   display: flex;
   align-items: center;
@@ -109,8 +109,8 @@
   white-space: nowrap;
 }
 .toggle-btn.active {
-  background: #2e2e2c;
-  color: #f0f0ee;
+  background: #2e2e2e;
+  color: #f0f0f0;
 }
 .toggle-btn i {
   font-size: 14px;
@@ -118,20 +118,20 @@
 
 .toggle-pill {
   display: inline-flex;
-  background: #1e1e1c;
-  border: 0.5px solid #3a3a36;
+  background: #1e1e1e;
+  border: 0.5px solid #363a38;
   border-radius: 9999px;
   padding: 3px;
   gap: 2px;
 }
 
 .upload-zone {
-  border: 1px dashed #3a3a36;
+  border: 1px dashed rgba(52, 211, 153, 0.4);
   border-radius: 8px;
   padding: 24px 16px;
   text-align: center;
   cursor: pointer;
-  background: #181817;
+  background: rgba(52, 211, 153, 0.08);
   transition:
     border-color 0.15s,
     background 0.15s;
@@ -142,19 +142,19 @@
 }
 .upload-zone:hover,
 .upload-zone.drag-over {
-  border-color: #c9a227;
-  background: #1e1c13;
+  border-color: #3db599;
+  background: rgba(52, 211, 153, 0.16);
 }
 .upload-zone.hidden {
   display: none;
 }
 .upload-title {
   font-size: 13px;
-  color: #c9a227;
+  color: #a7f3d0;
 }
 .upload-sub {
   font-size: 12px;
-  color: #5a5a56;
+  color: rgba(167, 243, 208, 0.65);
 }
 .kbd {
   display: inline-block;
@@ -166,25 +166,22 @@
   color: #7a7a74;
 }
 .preview-area {
-  display: none;
+  display: flex;
   border-radius: 8px;
   overflow: hidden;
-  border: 0.5px solid #3a3a36;
-  background: #181817;
+  border: 0.5px solid #363a38;
+  background: #181818;
   padding: 10px;
   align-items: center;
   gap: 12px;
-}
-.preview-area.visible {
-  display: flex;
 }
 .preview-thumb {
   width: 52px;
   height: 52px;
   object-fit: cover;
   border-radius: 6px;
-  background: #2a2a28;
-  border: 0.5px solid #3a3a36;
+  background: #282a2a;
+  border: 0.5px solid #363a38;
 }
 .preview-meta {
   flex: 1;
@@ -201,7 +198,7 @@
 }
 .preview-clear {
   background: transparent;
-  border: 0.5px solid #3a3a36;
+  border: 0.5px solid #363a38;
   border-radius: 6px;
   color: #7a7a74;
   font-size: 13px;
@@ -217,7 +214,7 @@
   color: #e24b4a;
 }
 
-.limit-select {
+.dropdown-select {
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.05);
@@ -353,14 +350,14 @@
   line-height: 1.5;
 }
 
-.sql-actions {
+.btn-row {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
 .run-btn {
-  width: 280px;
+  max-width: 280px;
   margin-top: 16px;
   border-radius: 16px;
   border: 1px solid rgba(52, 211, 153, 0.4);
@@ -380,6 +377,37 @@
 .run-btn:not(:disabled):hover {
   background: rgba(52, 211, 153, 0.2);
   border-color: #3db599;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  background: #3a3a3a;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease;
+}
+
+.toggle-switch.on {
+  background: #3db599;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: left 0.15s ease;
+}
+
+.toggle-switch.on .toggle-knob {
+  left: 18px;
 }
 
 .results-panel {

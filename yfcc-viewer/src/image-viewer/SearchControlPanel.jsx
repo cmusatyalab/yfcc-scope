@@ -23,7 +23,7 @@ export default function SearchControlPanel({
         <select
           value={useCoco ? "coco" : "clip"}
           onChange={(e) => setUseCoco(e.target.value === "coco")}
-          className="limit-select"
+          className="dropdown-select"
         >
           <option value="coco">YOLO Detected COCO Classes</option>
           <option value="clip">CLIP Embedding</option>
@@ -37,7 +37,7 @@ export default function SearchControlPanel({
         <select
           value={limit}
           onChange={(e) => setLimit(Number(e.target.value))}
-          className="limit-select"
+          className="dropdown-select"
         >
           {[20, 40, 60, 80, 100, 150, 200, 300, 400, 500].map((n) => (
             <option key={n} value={n}>
