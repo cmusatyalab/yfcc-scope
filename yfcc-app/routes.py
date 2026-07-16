@@ -286,7 +286,7 @@ async def run_query(request: Request):
         rows = await run_in_threadpool(execute_wrapped_query, raw_sql)
     except Exception as e:
         log.error("run_query failed: %s\nSQL: %s", e, raw_sql)
-        return JSONResponse({"error": f"Query failed: {e}"}, status_code=400)
+        return JSONResponse({"error": f"Query failed: {e}"}, status_code=500)
 
     out_rows = [
         build_vector_row(image_file_id, path, total_bboxes, counts_json)
@@ -314,7 +314,7 @@ async def run_query_count(request: Request):
         rows = await run_in_threadpool(execute_query, raw_sql)
     except Exception as e:
         log.error("run_query_count failed: %s\nSQL: %s", e, raw_sql)
-        return JSONResponse({"error": f"Query failed: {e}"}, status_code=400)
+        return JSONResponse({"error": f"Query failed: {e}"}, status_code=500)
 
     return JSONResponse({"rows": [{"count": r[0]} for r in rows]})
 
