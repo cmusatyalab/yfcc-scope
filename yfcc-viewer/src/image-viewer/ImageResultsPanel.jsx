@@ -105,12 +105,12 @@ export default function ImageResultsPanel({
                   <div>{row.image_file_id}</div>
 
                   <a
-                    href={`${baseUrl}/?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
+                    href={`${baseUrl}/boxviewer?image_file_id=${row.image_file_id}&select_all=1&min_conf=0.40`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="result-meta-link"
                   >
-                    {baseUrl}/?image_file_id=
+                    {baseUrl}/boxviewer?image_file_id=
                     {row.image_file_id}&select_all=1&min_conf=0.40
                   </a>
                 </div>

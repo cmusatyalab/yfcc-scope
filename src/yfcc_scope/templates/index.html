@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <title>YFCC Boxes Viewer</title>
-    <link rel="stylesheet" href="/static/css/app.css" />
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/app.css') }}" />
   </head>
   <body>
     <div class="page-top">
-      <a class="btn-link" href="/image-viewer/">Image Viewer →</a>
+      <a class="btn-link" href="{{ url_for('viewer', path='/') }}">Image Viewer →</a>
     </div>
-    <form id="ctrl_form" method="GET" action="/">
+    <form id="ctrl_form" method="GET" action="{{ url_for('boxviewer') }}">
       <div class="row toolbar">
         <input
           name="image_file_id"
@@ -99,7 +99,7 @@
       {% endif %}
     </div>
 
-    <script src="/static/js/page.js"></script>
-    <script src="/static/js/freqs.js"></script>
+    <script src="{{ url_for('static', path='/js/page.js') }}"></script>
+    <script src="{{ url_for('static', path='/js/freqs.js') }}"></script>
   </body>
 </html>

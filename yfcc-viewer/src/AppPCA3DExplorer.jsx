@@ -757,7 +757,7 @@ export default function App() {
                   <a
                     href={
                       picked.image_file_id
-                        ? `${API_BASE}/?image_file_id=${encodeURIComponent(picked.image_file_id)}&select_all=0`
+                        ? `${API_BASE}/boxviewer?image_file_id=${encodeURIComponent(picked.image_file_id)}&select_all=0`
                         : "#"
                     }
                     target="_blank"

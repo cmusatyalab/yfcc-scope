@@ -39,7 +39,7 @@ async def home(request: Request) -> RedirectResponse:
 app = Starlette(
     routes=[
         Route("/", home),
-        Route("/boxviewer", boxviewer),
+        Route("/boxviewer", boxviewer, name="boxviewer"),
         Route("/image", image),
         Route("/api/images", images_api),
         Route("/api/conf_hist", conf_hist, methods=["GET"]),

@@ -378,7 +378,7 @@ export default function App() {
                 {images.map((img) => (
                   <a
                     key={img.image_file_id}
-                    href={`${API_BASE}/?image_file_id=${encodeURIComponent(img.image_file_id)}&select_all=0&${Array.from(selectedLabels).map(l => `label=${encodeURIComponent(l)}`).join("&")}`}
+                    href={`${API_BASE}/boxviewer?image_file_id=${encodeURIComponent(img.image_file_id)}&select_all=0&${Array.from(selectedLabels).map(l => `label=${encodeURIComponent(l)}`).join("&")}`}
                     target="_blank"
                     rel="noreferrer"
                     title={img.image_file_id}
