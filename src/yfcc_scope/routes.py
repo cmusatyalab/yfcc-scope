@@ -1,33 +1,36 @@
+# SPDX-FileCopyrightText: 2025, 2026 Carnegie Mellon University
+# SPDX-License-Identifier: GPL-2.0-only
+
+from __future__ import annotations
+
 import datetime
 import json
 import urllib.parse
-import torch
-import open_clip
-import numpy as np
-import requests
-from pathlib import Path
-from PIL import Image, ImageDraw
+from importlib.resources import files
 from io import BytesIO
+
+import numpy as np
+import open_clip
+import requests
+import torch
+from PIL import Image, ImageDraw
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import (
     HTMLResponse,
-    StreamingResponse,
     JSONResponse,
     PlainTextResponse,
-    FileResponse,
     RedirectResponse,
+    StreamingResponse,
 )
 from starlette.templating import Jinja2Templates
-from stream_zip import stream_zip, ZIP_32
+from stream_zip import ZIP_32, stream_zip
 
-from .constants import LABELS, MAX_LIMIT, SCOPE_BASE
-from .utils import build_vector_row
-
+from .constants import LABELS
 from .db import (
     conf_hist_sync,
-    execute_wrapped_query,
     execute_query,
+    execute_wrapped_query,
     fetch,
     fetch_images_for_labels,
     fetch_paths_by_ids,
@@ -36,46 +39,31 @@ from .db import (
     read_total_images_yfcc,
     rebuild_histograms,
     rebuild_vector_table,
-    vector_rows_sync,
-    search_clip_images,
     search_clip_ids,
+    search_clip_images,
+    vector_rows_sync,
+)
+from .log import log
+from .settings import MAX_LIMIT, SCOPE_BASE
+from .utils import (
+    build_vector_row,
+    color_for_label,
+    parse_conf_ranges_0_100,
+    sanitize_scope_name,
+    validate_sql,
 )
 
-from .log import log
-from .utils import build_vector_row, color_for_label, parse_conf_ranges_0_100, validate_sql, sanitize_scope_name
-
-TEMPLATES_DIR = Path(__file__).parent / "templates"
+TEMPLATES_DIR = files("yfcc_scope") / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # Load CLIP model and tokenizer once at startup
-_model, _preprocess, _ = open_clip.create_model_and_transforms("ViT-B-32", pretrained="laion2b_s34b_b79k")
+_model, _preprocess, _ = open_clip.create_model_and_transforms(
+    "ViT-B-32", pretrained="laion2b_s34b_b79k"
+)
 _model.eval()
 _tokenizer = open_clip.get_tokenizer("ViT-B-32")
 _device = "cuda" if torch.cuda.is_available() else "cpu"
 _model = _model.to(_device)
-
-# Define the path to the viewer's dist directory
-viewer_dist_dir = Path(__file__).parent.parent / "yfcc-viewer" / "dist"
-
-
-async def viewer_index(request: Request):
-    index_path = viewer_dist_dir / "index.html"
-    if not index_path.is_file():
-        return PlainTextResponse("Viewer build not found. Run: npm run build", status_code=404)
-    return FileResponse(index_path)
-
-
-async def viewer_app(request: Request):
-    # Try fetch from dist first, then fallback to index.html for routing
-    rel_path = request.path_params.get("path", "")
-    if not rel_path:
-        return await viewer_index(request)
-
-    candidate = viewer_dist_dir / rel_path
-    if candidate.is_file():
-        return FileResponse(candidate)
-
-    return await viewer_index(request)
 
 
 async def redirect_to_viewer(request: Request):
@@ -95,12 +83,12 @@ def _parse_min_conf(qp, default=0.4):
 def _parse_limit_offset(qp, default_limit, max_limit):
     try:
         limit = int(qp.get("limit", f"{default_limit}"))
-    except ValueError:
-        raise ValueError("limit must be an int")
+    except ValueError as exc:
+        raise ValueError("limit must be an int") from exc
     try:
         offset = int(qp.get("offset", "0"))
-    except ValueError:
-        raise ValueError("offset must be an int")
+    except ValueError as exc:
+        raise ValueError("offset must be an int") from exc
 
     limit = max(1, min(max_limit, limit))
     offset = max(0, offset)
@@ -213,8 +201,12 @@ def _compute_clip_query(is_text, source, limit, search_fn):
 
 
 def _do_clip_query(is_text, source, limit):
-    _, embedding_list, rows = _compute_clip_query(is_text, source, limit, search_clip_images)
-    out_rows = [build_vector_row(image_file_id, path, 0, None) for image_file_id, path in rows]
+    _, embedding_list, rows = _compute_clip_query(
+        is_text, source, limit, search_clip_images
+    )
+    out_rows = [
+        build_vector_row(image_file_id, path, 0, None) for image_file_id, path in rows
+    ]
 
     return {"embedding": embedding_list, "rows": out_rows}
 
@@ -368,7 +360,12 @@ async def create_scope_coco(request: Request):
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-    log.info("create_scope received query: %s, scope name: %s, SQL: \n%s", query, scope_name, raw_sql)
+    log.info(
+        "create_scope received query: %s, scope name: %s, SQL: \n%s",
+        query,
+        scope_name,
+        raw_sql,
+    )
 
     rows = await run_in_threadpool(execute_query, raw_sql)
     obj_keys = [str(row[0]).split("_", 1)[0] for row in rows if row[0]]
@@ -485,12 +482,15 @@ async def download_zip(request: Request):
 
         import concurrent.futures
 
-        # Download chunk of images in parallel, yielding results as they arrive for streaming zip generation
+        # Download chunk of images in parallel, yielding results as they arrive
+        # for streaming zip generation
         chunk_size = 5
         for i in range(0, len(image_ids), chunk_size):
             chunk_ids = image_ids[i : i + chunk_size]
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=chunk_size) as executor:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=chunk_size
+            ) as executor:
                 # Submit fetch tasks for the current chunk of images to thread pool
                 futures = [executor.submit(fetch_image, img_id) for img_id in chunk_ids]
 
@@ -512,7 +512,9 @@ async def download_zip(request: Request):
         "Content-Type": "application/zip",
     }
 
-    return StreamingResponse(stream_zip(zip_files()), headers=headers, media_type="application/zip")
+    return StreamingResponse(
+        stream_zip(zip_files()), headers=headers, media_type="application/zip"
+    )
 
 
 async def freqs_api(request: Request):
@@ -550,7 +552,7 @@ async def recalc_freqs(request: Request):
 
 async def images_api(request: Request):
     qp = request.query_params
-    labels = [l.strip() for l in qp.getlist("label") if l.strip()]
+    labels = [label.strip() for label in qp.getlist("label") if label.strip()]
     try:
         limit, offset = _parse_limit_offset(qp, default_limit=50, max_limit=MAX_LIMIT)
     except ValueError as e:
@@ -559,11 +561,15 @@ async def images_api(request: Request):
     conf_ranges = parse_conf_ranges_0_100((qp.get("conf") or "").strip())
 
     try:
-        images = await run_in_threadpool(fetch_images_for_labels, labels, limit, offset, conf_ranges)
+        images = await run_in_threadpool(
+            fetch_images_for_labels, labels, limit, offset, conf_ranges
+        )
     except Exception as e:
         return JSONResponse({"error": f"images query failed: {e}"}, status_code=500)
 
-    return JSONResponse({"labels": labels, "limit": limit, "offset": offset, "images": images})
+    return JSONResponse(
+        {"labels": labels, "limit": limit, "offset": offset, "images": images}
+    )
 
 
 async def conf_hist(request: Request):
@@ -591,7 +597,9 @@ async def vector_rows_api(request: Request):
     min_total = max(0, min(10_000, min_total))
 
     try:
-        rows, updated_at = await run_in_threadpool(vector_rows_sync, limit, offset, min_total)
+        rows, updated_at = await run_in_threadpool(
+            vector_rows_sync, limit, offset, min_total
+        )
     except Exception as e:
         return JSONResponse({"error": f"vector_rows failed: {e}"}, status_code=500)
 
@@ -600,7 +608,9 @@ async def vector_rows_api(request: Request):
         for image_file_id, path, total_bboxes, counts_json in rows
     ]
 
-    return JSONResponse({"updated_at": updated_at, "limit": limit, "offset": offset, "rows": out_rows})
+    return JSONResponse(
+        {"updated_at": updated_at, "limit": limit, "offset": offset, "rows": out_rows}
+    )
 
 
 async def recalc_vectors(request: Request):

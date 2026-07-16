@@ -2,6 +2,21 @@
 
 This project's goal is to take the raw YFCC100M corpus and produce structured indexes that make it easy to pull out interesting subsets with natural language queries, which then become the datasets HAWK searches over.
 
+## Installation
+
+You need to have [uv](https://docs.astral.sh/uv) and [npm](https://nodejs.org) installed.
+
+```
+# setup .venv virtual environment / install Python dependencies
+uv sync
+
+# build Vite frontend code (/yfcc-viewer)
+uv build
+
+# run Python backend (/src/yfcc_scope)
+uv run uvicorn yfcc_scope.app:app --host 0.0.0.0 --port 8080
+```
+
 ## Project Structure
 
 ```
@@ -29,7 +44,7 @@ yfcc-scope
 │   ├── yfcc_yolo_to_postgres-entire-shard-batch.py
 │   └── missing_images.ipynb
 │
-├── yfcc-app/                           # Starlette app serving API and viewers
+├── src/yfcc_scope/                           # Starlette app serving API and viewers
 │   ├── __init__.py
 │   ├── app.py
 │   ├── constants.py
@@ -37,6 +52,7 @@ yfcc-scope
 │   ├── log.py
 │   ├── routes.py
 │   ├── utils.py
+│   ├── settings.py
 │   ├── static/
 │   │   ├── css/
 │   │   │   └── app.css
@@ -76,5 +92,7 @@ yfcc-scope
 │
 ├── LICENSE
 ├── README.md
-└─── requirements.txt
+├── dotenv.example			# example .env configuration file
+├── pyproject.toml			# python dependencies and packaging management
+└── hatch_build.py			# build hooks for the frontend components
 ```

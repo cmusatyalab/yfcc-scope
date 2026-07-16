@@ -14,4 +14,8 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    outDir: "../src/yfcc_scope/dist/",
+    emptyOutDir: true,
+  },
 });

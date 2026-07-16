@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2025, 2026 Carnegie Mellon University
+# SPDX-License-Identifier: GPL-2.0-only
+
+from __future__ import annotations
+
 import colorsys
 import hashlib
 import re
@@ -59,7 +64,9 @@ def validate_sql(raw_sql: str):
 
     # Keep user SQL simple since the backend already wraps it in a CTE.
     if re.search(r"\bWITH\b", upper_sql):
-        raise ValueError("Queries using WITH/CTEs are not allowed. Return a single SELECT statement.")
+        raise ValueError(
+            "Queries using WITH/CTEs are not allowed. Return a single SELECT statement."
+        )
 
     # Block expensive correlated-subquery ranking patterns
     if re.search(
@@ -67,16 +74,22 @@ def validate_sql(raw_sql: str):
         upper_sql,
         flags=re.IGNORECASE,
     ):
-        raise ValueError(
-            "Correlated subqueries in ORDER BY are not allowed. Use JOIN + GROUP BY + ORDER BY MAX(...) or AVG(...)."
+        msg = (
+            "Correlated subqueries in ORDER BY are not allowed. "
+            "Use JOIN + GROUP BY + ORDER BY MAX(...) or AVG(...)."
         )
+        raise ValueError(msg)
 
     if re.search(
         r"SELECT\s+(AVG|MAX|MIN|SUM|COUNT)\s*\([^)]*\)\s+FROM\s+BB_TABLE\s+WHERE\s+BB_TABLE\.IMAGE_FILE_ID\s*=",
         upper_sql,
         flags=re.IGNORECASE,
     ):
-        raise ValueError("Correlated subqueries against bb_table are not allowed. Use JOIN + GROUP BY instead.")
+        msg = (
+            "Correlated subqueries against bb_table are not allowed. "
+            "Use JOIN + GROUP BY instead."
+        )
+        raise ValueError(msg)
 
     return sql
 
@@ -95,7 +108,8 @@ def build_vector_row(image_file_id, path, total_bboxes, counts_json):
     item = {
         "image_file_id": image_file_id,
         "path": path,
-        # currently using the same url for thumbnails, might want to change this if we add separate thumbnail URLs in the future
+        # currently using the same url for thumbnails, might want to change
+        # this if we add separate thumbnail URLs in the future
         "thumb_url": path,
         "total_bboxes": int(total_bboxes or 0),
     }

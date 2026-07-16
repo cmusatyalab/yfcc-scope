@@ -1,4 +1,8 @@
-import os
+# SPDX-FileCopyrightText: 2025, 2026 Carnegie Mellon University
+# SPDX-License-Identifier: GPL-2.0-only
+
+from __future__ import annotations
+
 import time
 
 import psycopg2
@@ -6,16 +10,17 @@ from pgvector.psycopg2 import register_vector
 
 from .constants import LABELS
 from .log import log
+from .settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
 from .utils import conf_to_bin
 
 
 def open_conn():
     return psycopg2.connect(
-        dbname=os.environ.get("DB_NAME", "yfcc"),
-        user=os.environ.get("DB_USER", "postgres"),
-        password=os.environ.get("DB_PASSWORD", "postgres"),
-        host=os.environ.get("DB_HOST", "127.0.0.1"),
-        port=int(os.environ.get("DB_PORT", 5432)),
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=str(DB_PASSWORD),
+        host=DB_HOST,
+        port=DB_PORT,
     )
 
 
@@ -53,7 +58,11 @@ def fetch(image_file_id: str):
         return (None, [])
 
     path = rows[0][0]
-    cleaned = [(n, label, cx, cy, w, h, conf) for _, n, label, cx, cy, w, h, conf in rows if label is not None]
+    cleaned = [
+        (n, label, cx, cy, w, h, conf)
+        for _, n, label, cx, cy, w, h, conf in rows
+        if label is not None
+    ]
     return (path, cleaned)
 
 
@@ -93,7 +102,9 @@ def rebuild_histograms():
             INSERT INTO yfcc_label_conf_hist (label, conf_bin, box_count, updated_at)
             SELECT
                 b.label,
-                GREATEST(0, LEAST(100, FLOOR(b.confidence_score * 100.0 + 0.000001)))::SMALLINT AS conf_bin,
+                GREATEST(0, LEAST(100, FLOOR(
+                    b.confidence_score * 100.0 + 0.000001
+                )))::SMALLINT AS conf_bin,
                 COUNT(*) AS box_count,
                 %s AS updated_at
             FROM bb_table b
@@ -107,7 +118,9 @@ def rebuild_histograms():
             WITH maxbin AS (
                 SELECT
                     image_file_id,
-                    GREATEST(0, LEAST(100, FLOOR(MAX(confidence_score) * 100.0 + 0.000001)))::SMALLINT AS max_bin
+                    GREATEST(0, LEAST(100, FLOOR(
+                        MAX(confidence_score) * 100.0 + 0.000001
+                    )))::SMALLINT AS max_bin
                 FROM bb_table
                 WHERE confidence_score IS NOT NULL
                 GROUP BY image_file_id
@@ -232,7 +245,8 @@ def rebuild_vector_table():
                     FROM per_label
                     GROUP BY image_file_id
                 )
-                INSERT INTO yfcc_image_label_counts (image_file_id, total_bboxes, counts, updated_at)
+                INSERT INTO yfcc_image_label_counts
+                (image_file_id, total_bboxes, counts, updated_at)
                 SELECT image_file_id, total_bboxes, counts, %s
                 FROM per_image;
             """,
@@ -277,7 +291,8 @@ def fetch_images_for_labels(labels, limit, offset, conf_ranges=None):
         cur.execute(query, all_params)
     else:
         cur.execute(
-            "SELECT y.image_file_id, y.path FROM yfcc_index y ORDER BY y.ts DESC LIMIT %s OFFSET %s;",
+            "SELECT y.image_file_id, y.path FROM yfcc_index y "
+            "ORDER BY y.ts DESC LIMIT %s OFFSET %s;",
             (limit, offset),
         )
     rows = cur.fetchall()
@@ -296,12 +311,12 @@ def conf_hist_sync(labels):
       WHERE confidence_score IS NOT NULL AND label = ANY(%s)
       GROUP BY image_file_id, FLOOR(confidence_score * 100)::int
     )
-    SELECT bin, COUNT(*) AS image_count FROM x WHERE labels_hit = %s GROUP BY bin ORDER BY bin;
+    SELECT bin, COUNT(*) AS image_count FROM x
+    WHERE labels_hit = %s GROUP BY bin ORDER BY bin;
     """
-    with open_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (labels, len(labels)))
-            rows = cur.fetchall()
+    with open_conn() as conn, conn.cursor() as cur:
+        cur.execute(sql, (labels, len(labels)))
+        rows = cur.fetchall()
     counts = {b: c for (b, c) in rows if 0 <= b <= 100}
     return [{"bin": i, "image_count": int(counts.get(i, 0))} for i in range(101)]
 
@@ -323,7 +338,9 @@ def vector_rows_sync(limit, offset, min_total):
                 (min_total, limit, offset),
             )
             rows = cur.fetchall()
-            cur.execute("SELECT COALESCE(MAX(updated_at),0) FROM yfcc_image_label_counts;")
+            cur.execute(
+                "SELECT COALESCE(MAX(updated_at),0) FROM yfcc_image_label_counts;"
+            )
             updated_at = cur.fetchone()[0] or 0
         return rows, updated_at
     finally:
@@ -371,7 +388,11 @@ def fetch_paths_by_ids(image_ids):
     conn = open_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT image_file_id, path FROM yfcc_index WHERE image_file_id = ANY(%s)", (image_ids,))
+            cur.execute(
+                "SELECT image_file_id, path FROM yfcc_index "
+                "WHERE image_file_id = ANY(%s)",
+                (image_ids,),
+            )
             return {row[0]: row[1] for row in cur.fetchall()}
     except Exception as e:
         log.error("fetch_paths_by_ids failed: %s", e)
@@ -403,6 +424,7 @@ def search_clip_images(text_feat, limit):
     finally:
         conn.close()
 
+
 def search_clip_ids(text_feat, limit):
     conn = open_conn()
     try:
@@ -413,7 +435,7 @@ def search_clip_ids(text_feat, limit):
             cur.execute(
                 """
                 /*+ IndexScan(clip_embeddings clip_embeddings_embedding_idx_ivf) */
-                SELECT image_file_id FROM clip_embeddings 
+                SELECT image_file_id FROM clip_embeddings
                 ORDER BY embedding <=> %s
                 LIMIT %s;
                 """,

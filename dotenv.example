@@ -1,0 +1,17 @@
+# Copy to .env and fill in the blanks
+
+# Postgres database configuration
+DB_NAME=yfcc
+DB_USER=postgres
+DB_PASSWORD=
+DB_HOST=localhost
+DB_PORT=5432
+
+# MAX_LIMIT is the maximum number of results we fetch from
+# the database in a single query (defaults to 500)
+MAX_LIMIT=500
+
+# Hawk Scope server related settings
+# Base URL and API keys of the Hawk Scope server
+SCOPE_BASE=
+SCOPE_API_KEY=
