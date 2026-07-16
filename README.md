@@ -14,8 +14,30 @@ uv sync
 uv build
 
 # run Python backend (/src/yfcc_scope)
-uv run uvicorn yfcc_scope.app:app --host 0.0.0.0 --port 8080
+uv run uvicorn yfcc_scope.app:app --host 0.0.0.0
 ```
+
+You can then access the application at [http://<server>:8000](http://localhost:8000).
+
+## Development
+
+```
+# run Python backend (/src/yfcc_scope)
+uv run uvicorn yfcc_scope.app:app
+
+# run Vite development server
+cd yfcc-viewer && npm run dev
+```
+
+The backend only has to listen on localhost and the Vite development server
+will proxy any api calls. The development server will print to the console what
+urls can be used.
+
+If you _really_ want to make the development server publically accessible,
+start the Vite server with `npm run dev -- --host 0.0.0.0`. If you then also
+want to be able to access the server by using its DNS hostname, you
+additionally need to set the `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`
+environment variable to a comma separated list of acceptable hostnames.
 
 ## Project Structure
 

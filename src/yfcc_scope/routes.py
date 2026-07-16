@@ -20,7 +20,6 @@ from starlette.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
-    RedirectResponse,
     StreamingResponse,
 )
 from starlette.templating import Jinja2Templates
@@ -66,12 +65,6 @@ _device = "cuda" if torch.cuda.is_available() else "cpu"
 _model = _model.to(_device)
 
 
-async def redirect_to_viewer(request: Request):
-    rel_path = request.url.path.lstrip("/")
-    target = f"/viewer/{rel_path}" if rel_path else "/viewer"
-    return RedirectResponse(url=target, status_code=302)
-
-
 def _parse_min_conf(qp, default=0.4):
     try:
         min_conf = float(qp.get("min_conf", f"{default}"))
@@ -95,7 +88,7 @@ def _parse_limit_offset(qp, default_limit, max_limit):
     return limit, offset
 
 
-async def home(request: Request):
+async def boxviewer(request: Request):
     qp = request.query_params
     image_file_id = qp.get("image_file_id", "")
     selected = set(qp.getlist("label"))
