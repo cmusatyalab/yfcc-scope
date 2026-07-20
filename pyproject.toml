@@ -16,6 +16,7 @@ dependencies = [
     "stream-zip>=0.0.84",
     "torch>=2.7.1",
     "torchvision>=0.22.1",
+    "typer>=0.27.0",
     "uvicorn>=0.50.2",
 ]
 
@@ -28,6 +29,9 @@ jupyter = [
     "ipykernel>=7.3.0",
     "wids>=0.1.11",
 ]
+
+[project.scripts]
+yfcc-viewer = "yfcc_scope.cli:app"
 
 [tool.ruff]
 target-version = "py310"

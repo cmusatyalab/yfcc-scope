@@ -15,23 +15,29 @@ uv build
 
 # run Python backend (/src/yfcc_scope)
 uv run uvicorn yfcc_scope.app:app --host 0.0.0.0
+
+# or,
+uv run yfcc-viewer
 ```
 
-You can then access the application at [http://<server>:8000](http://localhost:8000).
+You can then access the application at
+[http://<server>:8000](http://localhost:8000), the Python backend will handle
+serving the compiled frontend assets to the client as well as the backend api.
 
 ## Development
 
 ```
 # run Python backend (/src/yfcc_scope)
-uv run uvicorn yfcc_scope.app:app
+uv run uvicorn yfcc_scope.app:app --reload
 
 # run Vite development server
 cd yfcc-viewer && npm run dev
 ```
 
-The backend only has to listen on localhost and the Vite development server
+The Python backend only has to listen on localhost and the Vite development server
 will proxy any api calls. The development server will print to the console what
-urls can be used.
+urls can be used. Both servers should handle live reloading and pushing updates
+to the client when the code is being modified.
 
 If you _really_ want to make the development server publically accessible,
 start the Vite server with `npm run dev -- --host 0.0.0.0`. If you then also
