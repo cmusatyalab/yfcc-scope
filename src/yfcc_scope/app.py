@@ -6,7 +6,7 @@ from __future__ import annotations
 from importlib.resources import files
 
 from starlette.applications import Starlette
-from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from starlette.routing import Route
 from starlette.staticfiles import StaticFiles
@@ -33,8 +33,10 @@ from .routes import (
 
 setup_logging()
 
+
 async def home(request: Request) -> RedirectResponse:
     return RedirectResponse(url="/image-viewer", status_code=302)
+
 
 app = Starlette(
     routes=[
@@ -65,6 +67,8 @@ app.mount("/static", StaticFiles(packages=[("yfcc_scope", "static")]), name="sta
 # Redirect React frontend application links
 viewer_dir = files("yfcc_scope") / "dist"
 app.mount("/assets", StaticFiles(directory=str(viewer_dir / "assets"), html=True))
-app.mount("/image-viewer", StaticFiles(directory=str(viewer_dir), html=True), name="viewer")
+app.mount(
+    "/image-viewer", StaticFiles(directory=str(viewer_dir), html=True), name="viewer"
+)
 app.mount("/dashboard", StaticFiles(directory=str(viewer_dir), html=True))
 app.mount("/pca3d", StaticFiles(directory=str(viewer_dir), html=True))
