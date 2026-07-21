@@ -6,37 +6,28 @@ from __future__ import annotations
 import datetime
 import json
 import urllib.parse
-from importlib.resources import files
 from io import BytesIO
 
 import numpy as np
 import open_clip
 import requests
 import torch
-from PIL import Image, ImageDraw
+from PIL import Image
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import (
-    HTMLResponse,
     JSONResponse,
     PlainTextResponse,
     StreamingResponse,
 )
-from starlette.templating import Jinja2Templates
 from stream_zip import ZIP_32, stream_zip
 
-from .constants import LABELS
 from .db import (
     conf_hist_sync,
     execute_query,
     execute_wrapped_query,
-    fetch,
     fetch_images_for_labels,
     fetch_paths_by_ids,
-    read_images_with_boxes_at_threshold,
-    read_label_counts_at_threshold,
-    read_total_images_yfcc,
-    rebuild_histograms,
     rebuild_vector_table,
     search_clip_ids,
     search_clip_images,
@@ -46,14 +37,10 @@ from .log import log
 from .settings import MAX_LIMIT, SCOPE_BASE
 from .utils import (
     build_vector_row,
-    color_for_label,
     parse_conf_ranges_0_100,
     sanitize_scope_name,
     validate_sql,
 )
-
-TEMPLATES_DIR = files("yfcc_scope") / "templates"
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # Load CLIP model and tokenizer once at startup
 _model, _preprocess, _ = open_clip.create_model_and_transforms(
@@ -63,14 +50,6 @@ _model.eval()
 _tokenizer = open_clip.get_tokenizer("ViT-B-32")
 _device = "cuda" if torch.cuda.is_available() else "cpu"
 _model = _model.to(_device)
-
-
-def _parse_min_conf(qp, default=0.4):
-    try:
-        min_conf = float(qp.get("min_conf", f"{default}"))
-    except ValueError:
-        min_conf = default
-    return max(0.0, min(1.0, round(min_conf, 2)))
 
 
 def _parse_limit_offset(qp, default_limit, max_limit):
@@ -86,83 +65,6 @@ def _parse_limit_offset(qp, default_limit, max_limit):
     limit = max(1, min(max_limit, limit))
     offset = max(0, offset)
     return limit, offset
-
-
-async def boxviewer(request: Request):
-    qp = request.query_params
-    image_file_id = qp.get("image_file_id", "")
-    selected = set(qp.getlist("label"))
-    all_checked = qp.get("select_all", "1") == "1"
-    min_conf = _parse_min_conf(qp, default=0.4)
-
-    img_params = [
-        f"image_file_id={image_file_id}",
-        f"select_all={'1' if all_checked else '0'}",
-        f"min_conf={min_conf:.2f}",
-    ]
-    if not all_checked:
-        img_params += [f"label={lab}" for lab in selected]
-    img_src = "/image?" + "&".join(img_params) if image_file_id else ""
-
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {
-            "image_file_id": image_file_id,
-            "all_checked": all_checked,
-            "select_all_val": "1" if all_checked else "0",
-            "min_conf": f"{min_conf:.2f}",
-            "min_conf_fmt": f"{min_conf:.2f}",
-            "labels": LABELS,
-            "selected_labels": selected,
-            "img_src": img_src,
-        },
-    )
-
-
-async def image(request: Request):
-    qp = request.query_params
-    image_file_id = qp.get("image_file_id", "")
-    all_checked = qp.get("select_all", "1") == "1"
-    selected = set(qp.getlist("label"))
-    min_conf = _parse_min_conf(qp, default=0.4)
-
-    path, rows = fetch(image_file_id)
-    if not path:
-        msg = f"not found (image_file_id={image_file_id})"
-        log.warning(msg)
-        return HTMLResponse(msg, status_code=404)
-
-    try:
-        resp = requests.get(path, timeout=10, stream=True)
-        resp.raise_for_status()
-        img = Image.open(BytesIO(resp.content)).convert("RGB")
-    except Exception as e:
-        msg = f"failed to fetch/open image: {path} err={e}"
-        log.error(msg)
-        return HTMLResponse(msg, status_code=502)
-
-    W, H = img.size
-    d = ImageDraw.Draw(img)
-
-    for n, label, cx, cy, w, h, conf in rows:
-        if (conf is None) or (conf < min_conf):
-            continue
-        if not all_checked and (not selected or label not in selected):
-            continue
-        x0 = (cx - w / 2) * W
-        y0 = (cy - h / 2) * H
-        x1 = (cx + w / 2) * W
-        y1 = (cy + h / 2) * H
-        color = color_for_label(label)
-        d.rectangle([x0, y0, x1, y1], outline=color, width=3)
-        tag = f"{n}: {label} ({conf:.2f})"
-        d.text((x0 + 2, y0 + 1), tag, fill=(255, 255, 255))
-
-    buf = BytesIO()
-    img.save(buf, "PNG")
-    buf.seek(0)
-    return StreamingResponse(buf, media_type="image/png")
 
 
 def _compute_text_features(texts):
@@ -508,39 +410,6 @@ async def download_zip(request: Request):
     return StreamingResponse(
         stream_zip(zip_files()), headers=headers, media_type="application/zip"
     )
-
-
-async def freqs_api(request: Request):
-    qp = request.query_params
-    min_conf = _parse_min_conf(qp, default=0.4)
-
-    counts, total_boxes, updated_at = read_label_counts_at_threshold(min_conf)
-    images_with_boxes = read_images_with_boxes_at_threshold(min_conf)
-    total_images_yfcc = read_total_images_yfcc()
-
-    labels_payload = {}
-    for lab in LABELS:
-        cnt = counts.get(lab, 0)
-        frac = (float(cnt) / float(total_boxes)) if total_boxes else 0.0
-        labels_payload[lab] = {"fraction": frac}
-
-    return JSONResponse(
-        {
-            "updated_at": updated_at,
-            "total_images_yfcc": total_images_yfcc,
-            "images_with_boxes": images_with_boxes,
-            "min_conf": f"{min_conf:.2f}",
-            "labels": labels_payload,
-        }
-    )
-
-
-async def recalc_freqs(request: Request):
-    try:
-        await run_in_threadpool(rebuild_histograms)
-    except Exception as e:
-        return PlainTextResponse(f"recalc failed: {e}", status_code=500)
-    return PlainTextResponse("ok (hist rebuilt)")
 
 
 async def images_api(request: Request):

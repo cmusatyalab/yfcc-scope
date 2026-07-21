@@ -111,7 +111,7 @@
     let data;
     try {
       const c = Number(minConf.value).toFixed(2);
-      data = await getJSON("/freqs?min_conf=" + encodeURIComponent(c));
+      data = await getJSON("/api/freqs?min_conf=" + encodeURIComponent(c));
     } catch (e) {
       return;
     }
