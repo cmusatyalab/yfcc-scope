@@ -7,7 +7,7 @@ import logging
 from importlib.resources import files
 from io import BytesIO
 
-import requests
+import niquests
 from PIL import Image, ImageDraw
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
@@ -92,12 +92,11 @@ async def image(request: Request) -> Response:
         raise HTTPException(status_code=404, detail=msg)
 
     try:
-        resp = requests.get(path, timeout=10, stream=True)
+        resp = await niquests.aget(path, timeout=10)
         resp.raise_for_status()
 
-        with BytesIO(resp.content) as buf:
-            img = Image.open(buf).convert("RGB")
-            img.load()
+        img = Image.open(BytesIO(resp.content)).convert("RGB")
+        img.load()
     except Exception as e:
         msg = f"failed to fetch/open image: {path} err={e}"
         log.error(msg)
