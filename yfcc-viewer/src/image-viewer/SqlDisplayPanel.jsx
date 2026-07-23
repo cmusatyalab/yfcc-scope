@@ -218,7 +218,9 @@ export default function SqlDisplayPanel({
               className={
                 countLoading
                   ? "reasoning-count-badge is-loading"
-                  : "reasoning-count-badge"
+                  : totalCount === "Error"
+                    ? "reasoning-count-badge is-error"
+                    : "reasoning-count-badge"
               }
             >
               {countLoading

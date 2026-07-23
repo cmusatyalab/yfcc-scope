@@ -344,6 +344,10 @@
   color: #fcd34d;
 }
 
+.reasoning-count-badge.is-error {
+  color: #ef4444;
+}
+
 .reasoning-text {
   color: #ddd;
   font-size: 14px;
