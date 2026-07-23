@@ -10,7 +10,6 @@ from io import BytesIO
 import niquests
 from PIL import Image, ImageDraw
 from starlette.applications import Starlette
-from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import (
@@ -24,14 +23,14 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from ..constants import LABELS
-from ..db import (
+from ..utils import color_for_label
+from .db import (
     fetch,
     read_images_with_boxes_at_threshold,
     read_label_counts_at_threshold,
     read_total_images_yfcc,
     rebuild_histograms,
 )
-from ..utils import color_for_label
 
 log = logging.getLogger(__name__)
 
@@ -50,17 +49,11 @@ async def boxviewer(request: Request) -> HTMLResponse:
     all_checked = qp.get("select_all", "1") == "1"
     min_conf = clip(float(qp.get("min_conf", "0.4")), minv=0.4)
 
-    if image_file_id:
-        img_src = request.url_for("image").include_query_params(
-            image_file_id=image_file_id,
-            select_all=1 if all_checked else 0,
-            min_conf=f"{min_conf:.2f}",
-        )
-        if not all_checked:
-            for label in selected:
-                img_src = img_src.include_query_params(label=label)
-    else:
-        img_src = None
+    img_src = (
+        request.url_for("image").replace(query=request.url.query)
+        if image_file_id
+        else None
+    )
 
     return templates.TemplateResponse(
         request,
@@ -85,7 +78,7 @@ async def image(request: Request) -> Response:
     selected = set(qp.getlist("label"))
     min_conf = clip(float(qp.get("min_conf", "0.4")), minv=0.4)
 
-    path, rows = fetch(image_file_id)
+    path, rows = await fetch(image_file_id)
     if not path:
         msg = f"not found (image_file_id={image_file_id})"
         log.warning(msg)
@@ -128,9 +121,9 @@ async def freqs_api(request: Request) -> JSONResponse:
     qp = request.query_params
     min_conf = clip(float(qp.get("min_conf", "0.4")), minv=0.4)
 
-    counts, total_boxes, updated_at = read_label_counts_at_threshold(min_conf)
-    images_with_boxes = read_images_with_boxes_at_threshold(min_conf)
-    total_images_yfcc = read_total_images_yfcc()
+    counts, total_boxes, updated_at = await read_label_counts_at_threshold(min_conf)
+    images_with_boxes = await read_images_with_boxes_at_threshold(min_conf)
+    total_images_yfcc = await read_total_images_yfcc()
 
     labels_payload = {}
     for lab in LABELS:
@@ -150,9 +143,10 @@ async def freqs_api(request: Request) -> JSONResponse:
 
 
 async def recalc_freqs(request: Request) -> PlainTextResponse:
+    await rebuild_histograms()
+    return PlainTextResponse("ok (histogram rebuilt)")
     try:
-        await run_in_threadpool(rebuild_histograms)
-        return PlainTextResponse("ok (histogram rebuilt)")
+        pass
     except Exception as err:
         msg = "Recalc histogram failed"
         raise HTTPException(status_code=500, detail=msg) from err

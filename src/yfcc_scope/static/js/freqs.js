@@ -97,7 +97,7 @@
         btn.disabled = true;
         btn.textContent = "Recalculating...";
         try {
-          await post("/recalc");
+          await post("/api/recalc_freqs");
           location.reload();
         } catch (e) {
           alert("Recalc failed: " + e.message);

@@ -8,10 +8,8 @@ import time
 import psycopg2
 from pgvector.psycopg2 import register_vector
 
-from .constants import LABELS
 from .log import log
 from .settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
-from .utils import conf_to_bin
 
 
 def open_conn():
@@ -22,48 +20,6 @@ def open_conn():
         host=DB_HOST,
         port=DB_PORT,
     )
-
-
-def fetch(image_file_id: str):
-    try:
-        conn = open_conn()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT y.path,
-                   b.bounding_box_number,
-                   b.label,
-                   b.center_x,
-                   b.center_y,
-                   b.width,
-                   b.height,
-                   b.confidence_score
-            FROM yfcc_index y
-            LEFT JOIN bb_table b
-              ON y.image_file_id = b.image_file_id
-            WHERE y.image_file_id = %s
-            ORDER BY COALESCE(b.bounding_box_number, 0)
-            """,
-            (image_file_id,),
-        )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        log.error("DB fetch failed for image_file_id=%r: %s", image_file_id, e)
-        return (None, [])
-
-    if not rows:
-        log.warning("image_file_id %r not found in yfcc_index", image_file_id)
-        return (None, [])
-
-    path = rows[0][0]
-    cleaned = [
-        (n, label, cx, cy, w, h, conf)
-        for _, n, label, cx, cy, w, h, conf in rows
-        if label is not None
-    ]
-    return (path, cleaned)
 
 
 def ensure_hist_tables(conn):
@@ -86,122 +42,6 @@ def ensure_hist_tables(conn):
     """)
     conn.commit()
     cur.close()
-
-
-def rebuild_histograms():
-    conn = open_conn()
-    ensure_hist_tables(conn)
-    cur = conn.cursor()
-    now = int(time.time())
-    try:
-        cur.execute("BEGIN;")
-        cur.execute("TRUNCATE yfcc_label_conf_hist;")
-        cur.execute("TRUNCATE yfcc_images_maxbin_hist;")
-        cur.execute(
-            """
-            INSERT INTO yfcc_label_conf_hist (label, conf_bin, box_count, updated_at)
-            SELECT
-                b.label,
-                GREATEST(0, LEAST(100, FLOOR(
-                    b.confidence_score * 100.0 + 0.000001
-                )))::SMALLINT AS conf_bin,
-                COUNT(*) AS box_count,
-                %s AS updated_at
-            FROM bb_table b
-            WHERE b.confidence_score IS NOT NULL
-            GROUP BY b.label, conf_bin;
-        """,
-            (now,),
-        )
-        cur.execute(
-            """
-            WITH maxbin AS (
-                SELECT
-                    image_file_id,
-                    GREATEST(0, LEAST(100, FLOOR(
-                        MAX(confidence_score) * 100.0 + 0.000001
-                    )))::SMALLINT AS max_bin
-                FROM bb_table
-                WHERE confidence_score IS NOT NULL
-                GROUP BY image_file_id
-            )
-            INSERT INTO yfcc_images_maxbin_hist (max_bin, image_count, updated_at)
-            SELECT max_bin, COUNT(*)::BIGINT, %s
-            FROM maxbin
-            GROUP BY max_bin;
-        """,
-            (now,),
-        )
-        cur.execute("COMMIT;")
-    except Exception as e:
-        cur.execute("ROLLBACK;")
-        conn.close()
-        log.exception("Histogram rebuild failed: %s", e)
-        raise
-    finally:
-        cur.close()
-        conn.close()
-
-
-def read_label_counts_at_threshold(min_conf: float):
-    tb = conf_to_bin(min_conf)
-    conn = open_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            """
-            SELECT label, COALESCE(SUM(box_count),0)
-            FROM yfcc_label_conf_hist
-            WHERE conf_bin >= %s
-            GROUP BY label;
-        """,
-            (tb,),
-        )
-        label_rows = cur.fetchall()
-        cur.execute("SELECT COALESCE(MAX(updated_at),0) FROM yfcc_label_conf_hist;")
-        updated_at = cur.fetchone()[0] or 0
-    finally:
-        cur.close()
-        conn.close()
-
-    counts = {lab: 0 for lab in LABELS}
-    for lab, cnt in label_rows:
-        if lab in counts:
-            counts[lab] = int(cnt)
-    total_boxes = sum(counts.values())
-    return counts, total_boxes, updated_at
-
-
-def read_images_with_boxes_at_threshold(min_conf: float) -> int:
-    tb = conf_to_bin(min_conf)
-    conn = open_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            """
-            SELECT COALESCE(SUM(image_count),0)
-            FROM yfcc_images_maxbin_hist
-            WHERE max_bin >= %s;
-        """,
-            (tb,),
-        )
-        n = cur.fetchone()[0] or 0
-    finally:
-        cur.close()
-        conn.close()
-    return int(n)
-
-
-def read_total_images_yfcc() -> int:
-    conn = open_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT COUNT(*) FROM yfcc_index;")
-        n = cur.fetchone()[0] or 0
-    finally:
-        cur.close()
-        conn.close()
-    return int(n)
 
 
 def ensure_vector_table(conn):
