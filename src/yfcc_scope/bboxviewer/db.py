@@ -95,7 +95,7 @@ async def fetch(image_file_id: str):
     bbox_stmt = (
         select(BoundingBoxes)
         .where(BoundingBoxes.image_file_id == image_file_id)
-        .where(BoundingBoxes.label is not None)
+        .where(BoundingBoxes.label.isnot(None))
         .order_by(BoundingBoxes.bounding_box_number)
     )
 
@@ -174,11 +174,11 @@ async def rebuild_histograms() -> None:
     now = int(time.time())
 
     async with engine.begin() as conn:
-        conn.run_sync(SQLTable.metadata.create_all)
+        await conn.run_sync(SQLTable.metadata.create_all)
 
     async with AsyncSession(engine) as session:
         await session.execute(text("TRUNCATE TABLE yfcc_label_conf_hist;"))
-        await session.execute(text("TRUNCATE TABLE yfcc_image_maxbin_hist;"))
+        await session.execute(text("TRUNCATE TABLE yfcc_images_maxbin_hist;"))
 
         def bin_func(arg):
             return cast(
@@ -228,7 +228,7 @@ async def rebuild_histograms() -> None:
                 stmt,
             )
         )
-        session.commit()
+        await session.commit()
 
 
 async def cleanup() -> None:
