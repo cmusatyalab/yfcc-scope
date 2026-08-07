@@ -5,6 +5,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import Dashboard from "./AppDashboard.jsx";
 import PCA3DExplorer from "./AppPCA3DExplorer.jsx";
 import ImageViewer from "./image-viewer/AppImageViewer.jsx";
+import ClusterExplorer from "./cluster-explorer/AppClusterExplorer.jsx";
 import "./App.css";
 
 export default function App() {
@@ -26,6 +27,9 @@ export default function App() {
             <NavLink to="/pca3d" className={linkClassName}>
               3D PCA Viewer
             </NavLink>
+            <NavLink to="/cluster" className={linkClassName}>
+              Cluster Explorer
+            </NavLink>
             <a href="/boxviewer" className="app-nav-link">
               Box Viewer →
             </a>
@@ -37,6 +41,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/image-viewer" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/pca3d" element={<PCA3DExplorer />} />
+        <Route path="/cluster" element={<ClusterExplorer />} />
         <Route path="/image-viewer" element={<ImageViewer />} />
         <Route path="*" element={<Navigate to="/image-viewer" replace />} />
       </Routes>

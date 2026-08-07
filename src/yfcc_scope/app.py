@@ -17,6 +17,9 @@ from .bboxviewer.app import (
 from .bboxviewer.app import (
     routes as bboxviewer,
 )
+from .cluster_centroids_pca3d.app import (
+    api_routes as cluster_centroids_api,
+)
 from .log import setup_logging
 from .routes import (
     clip_image_query,
@@ -53,6 +56,7 @@ api_routes = [
     Route("/create_scope_clip_image", create_scope_clip_image, methods=["POST"]),
     Route("/download_zip", download_zip, methods=["POST"]),
     *bboxviewer_api,
+    *cluster_centroids_api,
 ]
 routes = [
     Route("/", home),
@@ -71,3 +75,4 @@ app.mount(
 )
 app.mount("/dashboard", StaticFiles(directory=str(viewer_dir), html=True))
 app.mount("/pca3d", StaticFiles(directory=str(viewer_dir), html=True))
+app.mount("/cluster", StaticFiles(directory=str(viewer_dir), html=True))
