@@ -175,7 +175,7 @@ function PointCloudWithHighlight({
   );
 }
 
-function KeyboardCameraControls() {
+function KeyboardCameraControls({ selectedCentroid, centroids }) {
   const { camera } = useThree();
   const controlsRef = useRef(null);
   const pressedKeysRef = useRef(new Set());
@@ -210,8 +210,22 @@ function KeyboardCameraControls() {
     const offsetForward =
       (pressedKeys.has("w") || pressedKeys.has("arrowup") ? 1 : 0) -
       (pressedKeys.has("s") || pressedKeys.has("arrowdown") ? 1 : 0);
+    const focusTarget = pressedKeys.has("f");
+    const shouldMove = offsetRight !== 0 || offsetForward !== 0;
 
-    if (offsetRight === 0 && offsetForward === 0) {
+    if (!shouldMove && !focusTarget) {
+      return;
+    }
+
+    if (focusTarget) {
+      if (controlsRef.current && selectedCentroid !== null && centroids) {
+        controlsRef.current.target.set(
+          centroids[selectedCentroid][0],
+          centroids[selectedCentroid][1],
+          centroids[selectedCentroid][2],
+        );
+      }
+      controlsRef.current.update();
       return;
     }
 
@@ -412,7 +426,10 @@ export default function App() {
             selectedBucket={selectedBucket}
             setSelectedCentroid={setSelectedCentroid}
           />
-          <KeyboardCameraControls />
+          <KeyboardCameraControls
+            selectedCentroid={selectedCentroid}
+            centroids={centroids}
+          />
         </Canvas>
 
         <Legend
