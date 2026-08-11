@@ -9,7 +9,7 @@ from psycopg2.errors import ForeignKeyViolation
 
 TOTAL_NUM = 10016544
 YFCC_URL = "https://storage.cmusatyalab.org/yfcc100m/yfcc100m.json"
-EMBEDDING_PATH = "/home/ubuntu/yfcc-scope/clip-embedding/yfcc_image_embeddings.npy"
+EMBEDDING_PATH = "/home/ubuntu/yfcc-scope/embeddings/clip/embeddings.npy"
 
 
 def open_conn():
