@@ -8,35 +8,51 @@ import "./AppClusterExplorer.css";
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const API_PREFIX = `${API_BASE}/api`;
 
+async function extractErrorMessage(response) {
+  try {
+    const body = await response.json();
+    if (body && typeof body.error === "string" && body.error.trim()) {
+      return body.error;
+    }
+  } catch {
+    // Body is not JSON or does not contain an error message, ignore
+  }
+  return response.statusText || `HTTP ${response.status}`;
+}
+
 // Fetch the 3D PCA centroids from the API
-async function fetchPca3dCentroids() {
-  const response = await fetch(`${API_PREFIX}/centroids_pca3d`);
+async function fetchPca3dCentroids(embeddingType) {
+  const response = await fetch(
+    `${API_PREFIX}/centroids_pca3d?embedding=${embeddingType}`,
+  );
   if (!response.ok) {
     throw new Error(
-      `Failed to load centroids: ${response.status} ${response.statusText}`,
+      `Failed to load centroids: ${await extractErrorMessage(response)}`,
     );
   }
   return await response.json();
 }
 
 // Fetch the cluster sizes from the API
-async function fetchClusterSizes() {
-  const response = await fetch(`${API_PREFIX}/cluster_sizes`);
+async function fetchClusterSizes(embeddingType) {
+  const response = await fetch(
+    `${API_PREFIX}/cluster_sizes?embedding=${embeddingType}`,
+  );
   if (!response.ok) {
     throw new Error(
-      `Failed to load cluster sizes: ${response.status} ${response.statusText}`,
+      `Failed to load cluster sizes: ${await extractErrorMessage(response)}`,
     );
   }
   return await response.json();
 }
 
-async function fetchClusterImageIdx(clusterIndex) {
+async function fetchClusterImageIdx(embeddingType, clusterIndex) {
   const response = await fetch(
-    `${API_PREFIX}/cluster_image_indexes?cluster=${clusterIndex}`,
+    `${API_PREFIX}/cluster_image_indexes?embedding=${embeddingType}&cluster=${clusterIndex}`,
   );
   if (!response.ok) {
     throw new Error(
-      `Failed to load cluster image indexes: ${response.status} ${response.statusText}`,
+      `Failed to load cluster image indexes: ${await extractErrorMessage(response)}`,
     );
   }
   return await response.json();
@@ -224,8 +240,8 @@ function KeyboardCameraControls({ selectedCentroid, centroids }) {
           centroids[selectedCentroid][1],
           centroids[selectedCentroid][2],
         );
+        controlsRef.current.update();
       }
-      controlsRef.current.update();
       return;
     }
 
@@ -257,7 +273,7 @@ function buildClusterImageUrl(imageIdx) {
   return `${API_PREFIX}/image_wds?image_idx=${imageIdx}`;
 }
 
-function SideBarContent({ selectedCentroid, clusterSizes }) {
+function SideBarContent({ embeddingType, selectedCentroid, clusterSizes }) {
   const [imageIdxs, setImageIdxs] = useState([]);
 
   useEffect(() => {
@@ -266,9 +282,12 @@ function SideBarContent({ selectedCentroid, clusterSizes }) {
       return;
     }
 
-    async function loadClusterImageIdx(clusterIndex) {
+    async function loadClusterImageIdx() {
       try {
-        const imageIdx = await fetchClusterImageIdx(clusterIndex);
+        const imageIdx = await fetchClusterImageIdx(
+          embeddingType,
+          selectedCentroid,
+        );
         setImageIdxs(imageIdx);
       } catch (error) {
         console.error("Error fetching cluster image indexes:", error);
@@ -276,8 +295,8 @@ function SideBarContent({ selectedCentroid, clusterSizes }) {
     }
 
     setImageIdxs([]);
-    loadClusterImageIdx(selectedCentroid);
-  }, [selectedCentroid]);
+    loadClusterImageIdx();
+  }, [selectedCentroid, embeddingType]);
 
   if (selectedCentroid === null) {
     return <p>No centroid selected</p>;
@@ -319,12 +338,13 @@ function SideBarContent({ selectedCentroid, clusterSizes }) {
   );
 }
 
-function SideBar({ selectedCentroid, clusterSizes }) {
+function SideBar({ embeddingType, selectedCentroid, clusterSizes }) {
   return (
     <div className="cluster-explorer-sidebar">
       <h3 className="cluster-explorer-sidebar-title">Selected Centroid</h3>
       <div className="cluster-explorer-sidebar-content">
         <SideBarContent
+          embeddingType={embeddingType}
           selectedCentroid={selectedCentroid}
           clusterSizes={clusterSizes}
         />
@@ -333,18 +353,50 @@ function SideBar({ selectedCentroid, clusterSizes }) {
   );
 }
 
-function Legend({ selectedBucket, setSelectedBucket }) {
+function EmbeddingOptions({ embeddingType, setEmbeddingType }) {
   return (
-    <div className="cluster-explorer-legend" aria-label="Cluster size legend">
-      <div className="cluster-explorer-legend-title">
+    <div className="cluster-explorer-options" aria-label="Embedding options">
+      <div className="cluster-explorer-options-title">Embedding Type</div>
+      <div className="cluster-explorer-options-buttons">
+        <button
+          type="button"
+          className={`cluster-explorer-options-button${
+            embeddingType === "clip" ? " is-active" : ""
+          }`}
+          onClick={() => setEmbeddingType("clip")}
+          aria-pressed={embeddingType === "clip"}
+          aria-label="Use CLIP embeddings"
+        >
+          CLIP
+        </button>
+        <button
+          type="button"
+          className={`cluster-explorer-options-button${
+            embeddingType === "dinov3" ? " is-active" : ""
+          }`}
+          onClick={() => setEmbeddingType("dinov3")}
+          aria-pressed={embeddingType === "dinov3"}
+          aria-label="Use DINOv3 embeddings"
+        >
+          DINOv3
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SizeLegend({ selectedBucket, setSelectedBucket }) {
+  return (
+    <div className="cluster-explorer-options" aria-label="Cluster size legend">
+      <div className="cluster-explorer-options-title">
         Rounded log10(cluster size)
       </div>
-      <div className="cluster-explorer-legend-buttons">
+      <div className="cluster-explorer-options-buttons">
         {BUCKET_COLOR_HEX.map((color, bucket) => (
           <button
             key={color}
             type="button"
-            className={`cluster-explorer-legend-button${
+            className={`cluster-explorer-options-button${
               selectedBucket === bucket ? " is-active" : ""
             }`}
             style={{ backgroundColor: color }}
@@ -365,48 +417,65 @@ function Legend({ selectedBucket, setSelectedBucket }) {
 }
 
 export default function App() {
-  const centroidsRef = useRef([]);
-  const clusterSizesRef = useRef([]);
+  const [centroids, setCentroids] = useState([]);
+  const [clusterSizes, setClusterSizes] = useState([]);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedBucket, setSelectedBucket] = useState(null);
   const [selectedCentroid, setSelectedCentroid] = useState(null);
+  const [embeddingType, setEmbeddingType] = useState("clip");
 
   useEffect(() => {
     async function loadData() {
+      setDataLoaded(false);
+      setLoadError("");
+      setSelectedBucket(null);
+      setSelectedCentroid(null);
+
       try {
-        const centroids = await fetchPca3dCentroids();
-        const clusterSizes = await fetchClusterSizes();
-        centroidsRef.current = centroids;
-        clusterSizesRef.current = clusterSizes;
-        console.log(
-          "cluster explorer centroids:",
-          centroids.length,
-          centroids.slice(0, 10),
-        );
-        console.log(
-          "cluster explorer cluster sizes:",
-          clusterSizes.length,
-          clusterSizes.slice(0, 10),
-        );
-        setDataLoaded(true);
+        const centroids = await fetchPca3dCentroids(embeddingType);
+        const clusterSizes = await fetchClusterSizes(embeddingType);
+        setCentroids(centroids);
+        setClusterSizes(clusterSizes);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : String(error));
       }
+
+      console.log(
+        "cluster explorer centroids:",
+        centroids.length,
+        centroids.slice(0, 10),
+      );
+      console.log(
+        "cluster explorer cluster sizes:",
+        clusterSizes.length,
+        clusterSizes.slice(0, 10),
+      );
+
+      setDataLoaded(true);
     }
 
-    loadData(centroidsRef, clusterSizesRef, setDataLoaded, setLoadError);
-  }, []);
+    loadData();
+  }, [embeddingType]);
 
   if (loadError) {
-    return <TopBar Message={`Failed to load cluster explorer: ${loadError}`} />;
+    return (
+      <>
+        <TopBar Message={`Failed to load cluster explorer: ${loadError}`} />
+        <div className="cluster-explorer-container">
+          <div className="cluster-explorer-options-wrapper">
+          <EmbeddingOptions
+            embeddingType={embeddingType}
+            setEmbeddingType={setEmbeddingType}
+          />
+        </div>
+        </div>
+      </>
+    );
   }
   if (!dataLoaded) {
     return <TopBar Message="Loading 3D PCA data..." />;
   }
-
-  const centroids = centroidsRef.current;
-  const clusterSizes = clusterSizesRef.current;
 
   return (
     <>
@@ -432,12 +501,19 @@ export default function App() {
           />
         </Canvas>
 
-        <Legend
-          selectedBucket={selectedBucket}
-          setSelectedBucket={setSelectedBucket}
-        />
+        <div className="cluster-explorer-options-wrapper">
+          <EmbeddingOptions
+            embeddingType={embeddingType}
+            setEmbeddingType={setEmbeddingType}
+          />
+          <SizeLegend
+            selectedBucket={selectedBucket}
+            setSelectedBucket={setSelectedBucket}
+          />
+        </div>
 
         <SideBar
+          embeddingType={embeddingType}
           selectedCentroid={selectedCentroid}
           clusterSizes={clusterSizes}
         />

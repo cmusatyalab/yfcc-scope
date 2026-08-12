@@ -30,11 +30,18 @@
   display: block;
 }
 
-.cluster-explorer-legend {
+.cluster-explorer-options-wrapper {
   position: absolute;
   left: 16px;
   bottom: 16px;
   z-index: 2;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cluster-explorer-options {
   min-width: 190px;
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -45,26 +52,27 @@
   pointer-events: auto;
 }
 
-.cluster-explorer-legend-title {
+.cluster-explorer-options-title {
   margin-bottom: 8px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
 
-.cluster-explorer-legend-buttons {
+.cluster-explorer-options-buttons {
   display: flex;
   gap: 8px;
   margin-top: 8px;
   flex-wrap: wrap;
 }
 
-.cluster-explorer-legend-button {
+.cluster-explorer-options-button {
   min-width: 34px;
   height: 32px;
   padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
+  background-color:#2b2b2b;
   color: rgba(255, 255, 255, 0.96);
   font-size: 12px;
   font-weight: 700;
@@ -78,12 +86,12 @@
     filter 120ms ease;
 }
 
-.cluster-explorer-legend-button:hover {
+.cluster-explorer-options-button:hover {
   transform: translateY(-1px);
   filter: brightness(1.05);
 }
 
-.cluster-explorer-legend-button.is-active {
+.cluster-explorer-options-button.is-active {
   border-color: rgba(255, 255, 255, 0.98);
   box-shadow:
     0 0 0 2px rgba(255, 255, 255, 0.28),
