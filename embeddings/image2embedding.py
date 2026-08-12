@@ -20,6 +20,7 @@ DINOV3_REPO_DIR = "/home/ubuntu/dinov3"
 def parse_args():
     parser = argparse.ArgumentParser(description="Compute and save image embeddings for the YFCC dataset")
     parser.add_argument("-m", "--method", type=str, default="clip", help="Embedding model to use (clip or dinov3)")
+    parser.add_argument("-s", "--start", type=int, default=0, help="Starting index for processing")
     return parser.parse_args()
 
 
@@ -42,6 +43,7 @@ def get_model(method: str):
 
         model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-32", pretrained="laion2b_s34b_b79k")
         dim = 512
+        resize_size = 224
     elif method == "dinov3":
         model = torch.hub.load(
             DINOV3_REPO_DIR,
@@ -51,10 +53,11 @@ def get_model(method: str):
         )
         preprocess = make_transform_dinov3()
         dim = 384
+        resize_size = 256
     else:
         raise ValueError("Invalid method. Choose either 'clip' or 'dinov3'.")
 
-    return model, preprocess, dim
+    return model, preprocess, dim, resize_size
 
 def compute_normalized_embedding(method, images):
     if method == "clip":
@@ -69,9 +72,10 @@ def compute_normalized_embedding(method, images):
 
 
 class YFCCPreprocessDataset(Dataset):
-    def __init__(self, wids_ds, preprocess_fn, start_idx, total_len):
+    def __init__(self, wids_ds, preprocess_fn, resize_size, start_idx, total_len):
         self.wids_ds = wids_ds
         self.preprocess_fn = preprocess_fn
+        self.resize_size = resize_size
         self.start_idx = start_idx
         self.total_len = total_len
 
@@ -84,7 +88,7 @@ class YFCCPreprocessDataset(Dataset):
             img_tensor = self.preprocess_fn(self.wids_ds[real_idx][".jpg"])
         except Exception as e:
             # In case there are images totally corrupted, return a zero tensor with the same shape as the preprocess output
-            img_tensor = torch.zeros((3, 224, 224), dtype=torch.float32)
+            img_tensor = torch.zeros((3, self.resize_size, self.resize_size), dtype=torch.float32)
 
         return img_tensor, real_idx
 
@@ -92,7 +96,7 @@ class YFCCPreprocessDataset(Dataset):
 if __name__ == "__main__":
     args = parse_args()
 
-    model, preprocess, dim = get_model(args.method)
+    model, preprocess, dim, resize_size = get_model(args.method)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Device:", device)
@@ -109,7 +113,7 @@ if __name__ == "__main__":
 
     ds = wids.ShardListDataset(YFCC_URL)
 
-    dataset = YFCCPreprocessDataset(ds, preprocess, 0, TOTAL_NUM)
+    dataset = YFCCPreprocessDataset(ds, preprocess, resize_size, args.start, TOTAL_NUM)
     loader = DataLoader(dataset, batch_size=256, num_workers=8, pin_memory=(device == "cuda"), shuffle=False)
 
     for images, indices in tqdm(loader, total=len(loader)):
