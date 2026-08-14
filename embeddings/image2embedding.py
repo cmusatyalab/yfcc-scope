@@ -19,7 +19,13 @@ DINOV3_REPO_DIR = "/home/ubuntu/dinov3"
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Compute and save image embeddings for the YFCC dataset")
-    parser.add_argument("-m", "--method", type=str, default="clip", help="Embedding model to use (clip or dinov3)")
+    parser.add_argument(
+        "-m",
+        "--method",
+        type=str,
+        choices=["clip", "dinov3"],
+        help="Embedding model (clip or dinov3)",
+    )
     parser.add_argument("-s", "--start", type=int, default=0, help="Starting index for processing")
     return parser.parse_args()
 
@@ -58,6 +64,7 @@ def get_model(method: str):
         raise ValueError("Invalid method. Choose either 'clip' or 'dinov3'.")
 
     return model, preprocess, dim, resize_size
+
 
 def compute_normalized_embedding(method, images):
     if method == "clip":
