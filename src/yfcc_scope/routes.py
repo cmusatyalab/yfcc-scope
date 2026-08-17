@@ -34,6 +34,7 @@ from .db import (
     vector_rows_sync,
 )
 from .log import log
+from .scope.app import image_url
 from .settings import MAX_LIMIT, SCOPE_BASE
 from .utils import (
     build_vector_row,
@@ -424,7 +425,7 @@ async def images_api(request: Request):
 
     try:
         images = await run_in_threadpool(
-            fetch_images_for_labels, labels, limit, offset, conf_ranges
+            fetch_images_for_labels, request, labels, limit, offset, conf_ranges
         )
     except Exception as e:
         return JSONResponse({"error": f"images query failed: {e}"}, status_code=500)
@@ -466,8 +467,8 @@ async def vector_rows_api(request: Request):
         return JSONResponse({"error": f"vector_rows failed: {e}"}, status_code=500)
 
     out_rows = [
-        build_vector_row(image_file_id, path, total_bboxes, counts_json)
-        for image_file_id, path, total_bboxes, counts_json in rows
+        build_vector_row(image_file_id, image_url(request, image_file_id), total_bboxes, counts_json)
+        for image_file_id, _path, total_bboxes, counts_json in rows
     ]
 
     return JSONResponse(

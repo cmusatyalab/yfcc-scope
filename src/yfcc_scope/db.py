@@ -9,6 +9,7 @@ import psycopg2
 from pgvector.psycopg2 import register_vector
 
 from .log import log
+from .scope.app import image_url
 from .settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
 
 
@@ -103,7 +104,7 @@ def rebuild_vector_table():
         conn.close()
 
 
-def fetch_images_for_labels(labels, limit, offset, conf_ranges=None):
+def fetch_images_for_labels(request, labels, limit, offset, conf_ranges=None):
     conn = open_conn()
     cur = conn.cursor()
     conf_sql = ""
@@ -122,7 +123,7 @@ def fetch_images_for_labels(labels, limit, offset, conf_ranges=None):
             JOIN bb_table b ON b.image_file_id = y.image_file_id
             WHERE b.label = ANY(%s)
             {conf_sql}
-            GROUP BY y.image_file_id, y.path
+            GROUP BY y.image_file_id
             HAVING COUNT(DISTINCT b.label) = %s
             ORDER BY MAX(y.ts) DESC
             LIMIT %s OFFSET %s;
@@ -131,14 +132,14 @@ def fetch_images_for_labels(labels, limit, offset, conf_ranges=None):
         cur.execute(query, all_params)
     else:
         cur.execute(
-            "SELECT y.image_file_id, y.path FROM yfcc_index y "
+            "SELECT y.image_file_id FROM yfcc_index y "
             "ORDER BY y.ts DESC LIMIT %s OFFSET %s;",
             (limit, offset),
         )
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return [{"image_file_id": r[0], "path": r[1]} for r in rows]
+    return [{"image_file_id": r[0], "path": image_url(request, r[0])} for r in rows]
 
 
 def conf_hist_sync(labels):

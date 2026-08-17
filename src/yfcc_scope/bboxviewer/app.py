@@ -7,7 +7,6 @@ import logging
 from importlib.resources import files
 from io import BytesIO
 
-import niquests
 from PIL import Image, ImageDraw
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
@@ -23,9 +22,10 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
 from ..constants import LABELS
+from ..scope.slicer import get_image_by_id
 from ..utils import color_for_label
 from .db import (
-    fetch,
+    fetch_bboxes,
     read_images_with_boxes_at_threshold,
     read_label_counts_at_threshold,
     read_total_images_yfcc,
@@ -50,7 +50,7 @@ async def boxviewer(request: Request) -> HTMLResponse:
     min_conf = clip(float(qp.get("min_conf", "0.4")), minv=0.4)
 
     img_src = (
-        request.url_for("image").replace(query=request.url.query)
+        request.url_for("bbox_image").replace(query=request.url.query)
         if image_file_id
         else None
     )
@@ -78,27 +78,27 @@ async def image(request: Request) -> Response:
     selected = set(qp.getlist("label"))
     min_conf = clip(float(qp.get("min_conf", "0.4")), minv=0.4)
 
-    path, rows = await fetch(image_file_id)
-    if not path:
-        msg = f"not found (image_file_id={image_file_id})"
+    image_file_id = image_file_id.split("_", 1)[0]
+
+    bboxes = await fetch_bboxes(image_file_id)
+    if not bboxes:
+        msg = f"bounding boxes for {image_file_id} not found"
         log.warning(msg)
         raise HTTPException(status_code=404, detail=msg)
 
     try:
-        resp = await niquests.aget(path, timeout=10)
-        resp.raise_for_status()
-
-        img = Image.open(BytesIO(resp.content)).convert("RGB")
+        image_bytes = await get_image_by_id(image_file_id)
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
         img.load()
     except Exception as e:
-        msg = f"failed to fetch/open image: {path} err={e}"
+        msg = f"failed to fetch/open image: {image_file_id} err={e}"
         log.error(msg)
         raise HTTPException(status_code=502, detail=msg) from e
 
     W, H = img.size
     d = ImageDraw.Draw(img)
 
-    for n, label, cx, cy, w, h, conf in rows:
+    for n, label, cx, cy, w, h, conf in bboxes:
         if conf is None or conf < min_conf:
             continue
         if not all_checked and label not in selected:
@@ -154,7 +154,7 @@ async def recalc_freqs(request: Request) -> PlainTextResponse:
 
 routes = [
     Route("/", boxviewer, name="bboxviewer"),
-    Route("/image", image, name="image"),
+    Route("/image", image, name="bbox_image"),
     Mount("/static", StaticFiles(packages=[("yfcc_scope", "static")]), name="static"),
 ]
 api_routes = [

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Webdataset Reassembly</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #f5f5f0; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgo=">
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H, cx, cy, ringRadius;
+const SHARD_COUNT = 6;
+const SHARD_SIZE = 50;
+const SPAWN_MS = 500;
+const BAR_H = 8;
+const BAR_Y = 50;
+
+const COLORS = [
+  ['#264653', '#2a9d8f'],
+  ['#e76f51', '#f4a261'],
+  ['#6d597a', '#b56576'],
+  ['#283618', '#859900'],
+  ['#3d405b', '#81a1c1'],
+  ['#6b705c', '#a7c27d'],
+];
+
+let shards = [];
+let pieces = [];
+let count = 0;
+let fadeAlpha = 0;
+let state = 'assembling';
+let lastSpawn = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx = W / 2;
+  cy = H / 2;
+  ringRadius = Math.min(W, H) * 0.32;
+}
+
+function initShards() {
+  shards = [];
+  for (let i = 0; i < SHARD_COUNT; i++) {
+    const angle = (i / SHARD_COUNT) * Math.PI * 2 - Math.PI / 2;
+    shards.push({ angle, colors: COLORS[i] });
+  }
+}
+
+function spawnPiece() {
+  const shard = shards[Math.floor(Math.random() * shards.length)];
+  const color = shard.colors[Math.floor(Math.random() * 2)];
+  const arcAngle = (Math.PI * 2 / SHARD_COUNT) * 0.85;
+  const angle = shard.angle + (Math.random() - 0.5) * arcAngle;
+  pieces.push({
+    x: cx + Math.cos(angle) * ringRadius,
+    y: cy + Math.sin(angle) * ringRadius,
+    color,
+    t: 0,
+    speed: 0.0006 * (0.9 + Math.random() * 0.2),
+  });
+}
+
+function drawCenter() {
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawGrid() {
+  ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+}
+
+function drawRing() {
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  for (let i = 0; i < shards.length; i++) {
+    const s = shards[i];
+    const a = (Math.PI * 2 / SHARD_COUNT) * 0.85;
+    const sa = s.angle - a / 2, ea = s.angle + a / 2;
+
+    ctx.fillStyle = s.colors[0] + '30';
+    ctx.strokeStyle = s.colors[0];
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringRadius, sa, ea);
+    ctx.arc(cx, cy, ringRadius - 18, ea, sa, true);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    for (let p = 0; p < 12; p++) {
+      const pa = sa + (ea - sa) * (p / 12);
+      const px = cx + Math.cos(pa) * ringRadius;
+      const py = cy + Math.sin(pa) * ringRadius;
+      const col = p % 2 === 0 ? s.colors[0] : s.colors[1];
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(pa + Math.PI / 2);
+      ctx.fillStyle = col + '80';
+      ctx.fillRect(-3, -6, 6, 12);
+      ctx.restore();
+    }
+
+    const lr = ringRadius + 28;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`shard-${String(i).padStart(3, '0')}.tar`, cx + Math.cos(s.angle) * lr, cy + Math.sin(s.angle) * lr);
+  }
+}
+
+function drawPieces() {
+  for (let i = pieces.length - 1; i >= 0; i--) {
+    const p = pieces[i];
+    p.t += p.speed;
+
+    if (p.t >= 1) {
+      if (state === 'assembling') {
+        count++;
+        if (count >= SHARD_SIZE) {
+          state = 'fading';
+          fadeAlpha = 0;
+        }
+      }
+      pieces.splice(i, 1);
+      continue;
+    }
+
+    const x = p.x + (cx - p.x) * p.t;
+    const y = p.y + (cy - p.y) * p.t;
+    const size = 2.5 + (1 - p.t) * 1.5;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(x - size / 2, y - size / 2, size, size);
+  }
+}
+
+function drawBar() {
+  const barW = W - 80;
+  const barX = 40;
+
+  // Background
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillRect(barX, BAR_Y, barW, BAR_H);
+
+  // Fill
+  const prog = Math.min(count / SHARD_SIZE, 1);
+  ctx.fillStyle = state === 'fading' ? `rgba(0,0,0,${0.5 * (1 - fadeAlpha)})` : 'rgba(0,0,0,0.4)';
+  ctx.fillRect(barX, BAR_Y, barW * prog, BAR_H);
+
+  // Label
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${count} / ${SHARD_SIZE}`, barX, BAR_Y + BAR_H + 12);
+
+  // Title
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.font = '11px monospace';
+  ctx.fillText('webdataset reassembly', 20, 20);
+}
+
+function loop(now) {
+  const dt = now - (loop.last || now);
+  loop.last = now;
+
+  if (now - lastSpawn > SPAWN_MS) {
+    spawnPiece();
+    lastSpawn = now;
+    if (Math.random() < 0.4) spawnPiece();
+  }
+
+  if (state === 'fading') {
+    fadeAlpha += dt / 1500;
+    if (fadeAlpha >= 1) {
+      count = 0;
+      state = 'assembling';
+      fadeAlpha = 0;
+      lastSpawn = now;
+    }
+  }
+
+  ctx.clearRect(0, 0, W, H);
+  drawGrid();
+  drawBar();
+  drawRing();
+  drawCenter();
+  drawPieces();
+
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize', () => { resize(); initShards(); });
+resize();
+initShards();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

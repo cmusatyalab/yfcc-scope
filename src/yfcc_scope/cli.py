@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import typer
 
+from .scope import cli as scope_cli
+
 app = typer.Typer(no_args_is_help=True)
 
 
@@ -15,6 +17,10 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
 
     uvicorn.run("yfcc_scope.app:app", host=host, port=port, log_level="info")
 
+
+app.add_typer(scope_cli.scope_app, name="scope")
+app.add_typer(scope_cli.db_app, name="scope-db")
+app.add_typer(scope_cli.test_app, name="scope-test")
 
 if __name__ == "__main__":
     app()

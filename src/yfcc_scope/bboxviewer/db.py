@@ -90,22 +90,17 @@ class ImagesMaxbin_Histograms(SQLTable):
     updated_at: Mapped[int] = mapped_column(INT)
 
 
-async def fetch(image_file_id: str):
-    path_stmt = select(YFCC_Index.path).where(YFCC_Index.image_file_id == image_file_id)
+async def fetch_bboxes(image_file_id: str):
     bbox_stmt = (
         select(BoundingBoxes)
-        .where(BoundingBoxes.image_file_id == image_file_id)
+        .where(BoundingBoxes.image_file_id.like(f"{image_file_id}_%"))
         .where(BoundingBoxes.label.isnot(None))
         .order_by(BoundingBoxes.bounding_box_number)
     )
 
-    path = None
     cleaned = []
     try:
         async with AsyncSession(engine) as session:
-            result = await session.execute(path_stmt)
-            path = result.scalar()
-
             bboxes = await session.execute(bbox_stmt)
             cleaned = [
                 (
@@ -121,12 +116,9 @@ async def fetch(image_file_id: str):
             ]
     except Exception as e:
         log.error("DB fetch failed for image_file_id=%r: %s", image_file_id, e)
-        return (None, [])
+        return []
 
-    if path is None:
-        log.warning("image_file_id %r not found in yfcc_index", image_file_id)
-
-    return (path, cleaned)
+    return cleaned
 
 
 async def read_label_counts_at_threshold(min_conf: float):
