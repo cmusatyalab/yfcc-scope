@@ -385,6 +385,72 @@ function EmbeddingOptions({ embeddingType, setEmbeddingType }) {
   );
 }
 
+function CentroidIdSelector({
+  centroids,
+  selectedCentroid,
+  setSelectedCentroid,
+}) {
+  const [inputValue, setInputValue] = useState(String(selectedCentroid ?? ""));
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    setInputValue(String(selectedCentroid ?? ""));
+  }, [selectedCentroid]);
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    const trimmedValue = inputValue.trim();
+    if (trimmedValue === "") {
+      setError("Centroid ID is required.");
+      return;
+    }
+
+    const parsedValue = Number(trimmedValue);
+    if (
+      !Number.isInteger(parsedValue) ||
+      parsedValue < 0 ||
+      parsedValue >= centroids.length
+    ) {
+      setError(
+        `Invalid centroid id: ${trimmedValue}. Use an integer between 0 and ${centroids.length - 1}.`,
+      );
+      return;
+    }
+
+    setError("");
+    setSelectedCentroid(parsedValue);
+    inputRef.current?.blur();
+  };
+
+  return (
+    <div className="cluster-explorer-options" aria-label="Centroid ID selector">
+      <div className="cluster-explorer-options-title">Centroid ID</div>
+      <form className="cluster-explorer-centroid-form" onSubmit={handleSubmit}>
+        <input
+          ref={inputRef}
+          className="cluster-explorer-centroid-input"
+          value={inputValue}
+          onChange={(event) => setInputValue(event.target.value)}
+          onKeyDown={(event) => event.stopPropagation()}
+          onKeyUp={(event) => event.stopPropagation()}
+          aria-label="Centroid ID"
+          placeholder={`0 to ${centroids.length - 1}`}
+        />
+        <button type="submit" className="cluster-explorer-centroid-submit">
+          Select
+        </button>
+      </form>
+      {error ? (
+        <div className="cluster-explorer-error-message" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SizeLegend({ selectedBucket, setSelectedBucket }) {
   return (
     <div className="cluster-explorer-options" aria-label="Cluster size legend">
@@ -464,11 +530,11 @@ export default function App() {
         <TopBar Message={`Failed to load cluster explorer: ${loadError}`} />
         <div className="cluster-explorer-container">
           <div className="cluster-explorer-options-wrapper">
-          <EmbeddingOptions
-            embeddingType={embeddingType}
-            setEmbeddingType={setEmbeddingType}
-          />
-        </div>
+            <EmbeddingOptions
+              embeddingType={embeddingType}
+              setEmbeddingType={setEmbeddingType}
+            />
+          </div>
         </div>
       </>
     );
@@ -505,6 +571,11 @@ export default function App() {
           <EmbeddingOptions
             embeddingType={embeddingType}
             setEmbeddingType={setEmbeddingType}
+          />
+          <CentroidIdSelector
+            centroids={centroids}
+            selectedCentroid={selectedCentroid}
+            setSelectedCentroid={setSelectedCentroid}
           />
           <SizeLegend
             selectedBucket={selectedBucket}

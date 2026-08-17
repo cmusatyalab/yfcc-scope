@@ -59,6 +59,48 @@
   letter-spacing: 0.04em;
 }
 
+.cluster-explorer-centroid-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cluster-explorer-centroid-input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 12px;
+}
+
+.cluster-explorer-centroid-input:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.2);
+  outline-offset: 1px;
+}
+
+.cluster-explorer-centroid-submit {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.96);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cluster-explorer-error-message {
+  margin-top: 8px;
+  color: #ff9b9b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .cluster-explorer-options-buttons {
   display: flex;
   gap: 8px;
