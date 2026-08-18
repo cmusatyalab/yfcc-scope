@@ -46,9 +46,9 @@ async function fetchClusterSizes(embeddingType) {
   return await response.json();
 }
 
-async function fetchClusterImageIdx(embeddingType, clusterIndex) {
+async function fetchClusterImageId(embeddingType, clusterIndex) {
   const response = await fetch(
-    `${API_PREFIX}/cluster_image_indexes?embedding=${embeddingType}&cluster=${clusterIndex}`,
+    `${API_PREFIX}/cluster_image_id?embedding=${embeddingType}&cluster=${clusterIndex}`,
   );
   if (!response.ok) {
     throw new Error(
@@ -269,32 +269,32 @@ function KeyboardCameraControls({ selectedCentroid, centroids }) {
   return <OrbitControls ref={controlsRef} />;
 }
 
-function buildClusterImageUrl(imageIdx) {
-  return `${API_PREFIX}/image_wds?image_idx=${imageIdx}`;
+function buildClusterImageUrl(imageId) {
+  return `${API_BASE}/image/${imageId}.jpg`;
 }
 
 function SideBarContent({ embeddingType, selectedCentroid, clusterSizes }) {
-  const [imageIdxs, setImageIdxs] = useState([]);
+  const [imageIdList, setImageIdList] = useState([]);
 
   useEffect(() => {
     if (selectedCentroid === null) {
-      setImageIdxs([]);
+      setImageIdList([]);
       return;
     }
 
     async function loadClusterImageIdx() {
       try {
-        const imageIdx = await fetchClusterImageIdx(
+        const imageId = await fetchClusterImageId(
           embeddingType,
           selectedCentroid,
         );
-        setImageIdxs(imageIdx);
+        setImageIdList(imageId);
       } catch (error) {
         console.error("Error fetching cluster image indexes:", error);
       }
     }
 
-    setImageIdxs([]);
+    setImageIdList([]);
     loadClusterImageIdx();
   }, [selectedCentroid, embeddingType]);
 
@@ -302,7 +302,7 @@ function SideBarContent({ embeddingType, selectedCentroid, clusterSizes }) {
     return <p>No centroid selected</p>;
   }
 
-  const visibleImageIdxs = imageIdxs.slice(0, 10);
+  const visibleImageId = imageIdList.slice(0, 100);
 
   return (
     <>
@@ -313,22 +313,22 @@ function SideBarContent({ embeddingType, selectedCentroid, clusterSizes }) {
         Cluster Size: {clusterSizes[selectedCentroid]}
       </p>
       <p className="cluster-explorer-sidebar-summary">
-        Showing {visibleImageIdxs.length} images
+        Showing {visibleImageId.length} images
       </p>
       <div className="cluster-explorer-results-list">
-        {visibleImageIdxs.map((imageIdx) => (
-          <div key={imageIdx} className="cluster-explorer-result-item">
+        {visibleImageId.map((imageId) => (
+          <div key={imageId} className="cluster-explorer-result-item">
             <div className="cluster-explorer-result-card">
               <div className="cluster-explorer-img-container">
                 <img
-                  src={buildClusterImageUrl(imageIdx)}
+                  src={buildClusterImageUrl(imageId)}
                   className="cluster-explorer-result-img"
                   loading="lazy"
                 />
               </div>
 
               <div className="cluster-explorer-result-meta">
-                <div>Image Index: {imageIdx}</div>
+                <div>Image id: {imageId}</div>
               </div>
             </div>
           </div>

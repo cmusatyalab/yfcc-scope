@@ -4,8 +4,8 @@
 from io import BytesIO
 from pathlib import Path
 
+import json
 import numpy as np
-import wids
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -15,10 +15,8 @@ from ..log import log
 
 METHOD = "faiss_kmeans"
 BASE_DIR = Path(__file__).resolve().parent
-WIDS_JSON_URL = "https://storage.cmusatyalab.org/yfcc100m/yfcc100m.json"
 
 pca_cluster_data = {}
-ds = wids.ShardListDataset(WIDS_JSON_URL)
 
 
 def _load_pca_data(embedding_type: str):
@@ -33,6 +31,8 @@ def _load_pca_data(embedding_type: str):
     assignments = np.load(BASE_DIR / embedding_type / f"{METHOD}_assignments.npy")
     inverted_index_indptr = np.load(BASE_DIR / embedding_type / f"{METHOD}_inverted_index_indptr.npy")
     inverted_index_order = np.load(BASE_DIR / embedding_type / f"{METHOD}_inverted_index_order.npy")
+    with open(BASE_DIR / "image_id_list.json") as f:
+        image_id_list = json.load(f)
 
     n_clusters = pca3d_centroids.shape[0]
     counts = np.bincount(assignments, minlength=n_clusters)
@@ -43,6 +43,7 @@ def _load_pca_data(embedding_type: str):
         "inverted_index_indptr": inverted_index_indptr,
         "inverted_index_order": inverted_index_order,
         "counts": counts,
+        "image_id_list": image_id_list,
     }
 
 
@@ -78,46 +79,29 @@ async def cluster_sizes(request: Request):
 
 
 @load_pca_data_required
-async def cluster_image_indexes(request: Request):
+async def cluster_image_id(request: Request):
     try:
         cluster_index = int(request.query_params["cluster"])
     except (ValueError, KeyError):
         return JSONResponse({"error": "Invalid or missing 'cluster' query parameter"}, status_code=400)
 
     embedding = request.query_params["embedding"]
-    n_clusters = len(pca_cluster_data[embedding]["inverted_index_indptr"]) - 1
+    inverted_index_indptr = pca_cluster_data[embedding]["inverted_index_indptr"]
+    inverted_index_order = pca_cluster_data[embedding]["inverted_index_order"]
+    image_id_list = pca_cluster_data[embedding]["image_id_list"]
+
+    n_clusters = len(inverted_index_indptr) - 1
     if not (0 <= cluster_index < n_clusters):
         return JSONResponse({"error": "cluster index out of range"}, status_code=400)
 
-    inverted_index_indptr = pca_cluster_data[embedding]["inverted_index_indptr"]
-    inverted_index_order = pca_cluster_data[embedding]["inverted_index_order"]
     start = inverted_index_indptr[cluster_index]
     end = inverted_index_indptr[cluster_index + 1]
-    image_indexes = inverted_index_order[start:end]
-    return JSONResponse(image_indexes.tolist())
-
-
-def image_wds(request: Request):
-    try:
-        idx = int(request.query_params["image_idx"])
-    except (ValueError, KeyError):
-        return JSONResponse({"error": "Invalid or missing 'image_idx' query parameter"}, status_code=400)
-
-    if not (0 <= idx < len(ds)):
-        return JSONResponse({"error": "image_idx out of range"}, status_code=400)
-
-    img = ds[idx][".jpg"]
-
-    buffer = BytesIO()
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    img.save(buffer, format="JPEG")
-    return Response(buffer.getvalue(), media_type="image/jpeg")
+    image_ids = [image_id_list[i] for i in inverted_index_order[start:end]]
+    return JSONResponse(image_ids)
 
 
 api_routes = [
     Route("/centroids_pca3d", centroids_pca3d),
     Route("/cluster_sizes", cluster_sizes),
-    Route("/cluster_image_indexes", cluster_image_indexes),
-    Route("/image_wds", image_wds),
+    Route("/cluster_image_id", cluster_image_id),
 ]

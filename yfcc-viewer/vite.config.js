@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
         "/api": { target: target, changeOrigin: true },
         "/boxviewer": { target: target, changeOrigin: true },
         "/static": { target: target, changeOrigin: true },
+        "/image": { target: target, changeOrigin: true },
       },
     },
   };
