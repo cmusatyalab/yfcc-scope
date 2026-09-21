@@ -66,6 +66,18 @@ function TopBar({ Message }) {
   );
 }
 
+function ThreeDGrid() {
+  const gridArgs = [100, 20, "#424242", "#1a1a1a"];
+
+  return (
+    <>
+      <gridHelper args={gridArgs} />
+      <gridHelper args={gridArgs} rotation={[Math.PI / 2, 0, 0]} />
+      <gridHelper args={gridArgs} rotation={[0, 0, Math.PI / 2]} />
+    </>
+  );
+}
+
 const BUCKET_COLOR_HEX = [
   "#d55e00",
   "#e69f00",
@@ -273,7 +285,12 @@ function buildClusterImageUrl(imageId) {
   return `${API_BASE}/image/${imageId}.jpg`;
 }
 
-function SideBarContent({ embeddingType, selectedCentroid, clusterSizes }) {
+function SideBarContent({
+  embeddingType,
+  selectedCentroid,
+  clusterSizes,
+  centroids,
+}) {
   const [imageIdList, setImageIdList] = useState([]);
 
   useEffect(() => {
@@ -302,6 +319,7 @@ function SideBarContent({ embeddingType, selectedCentroid, clusterSizes }) {
     return <p>No centroid selected</p>;
   }
 
+  const selectedCoordinates = centroids[selectedCentroid];
   const visibleImageId = imageIdList.slice(0, 100);
 
   return (
@@ -311,6 +329,11 @@ function SideBarContent({ embeddingType, selectedCentroid, clusterSizes }) {
       </p>
       <p className="cluster-explorer-sidebar-summary">
         Cluster Size: {clusterSizes[selectedCentroid]}
+      </p>
+      <p className="cluster-explorer-sidebar-summary">
+        PCA 3D Coordinates: ({selectedCoordinates[0].toFixed(4)}, {" "}
+        {selectedCoordinates[1].toFixed(4)}, {" "}
+        {selectedCoordinates[2].toFixed(4)})
       </p>
       <p className="cluster-explorer-sidebar-summary">
         Showing {visibleImageId.length} images
@@ -338,7 +361,12 @@ function SideBarContent({ embeddingType, selectedCentroid, clusterSizes }) {
   );
 }
 
-function SideBar({ embeddingType, selectedCentroid, clusterSizes }) {
+function SideBar({
+  embeddingType,
+  selectedCentroid,
+  clusterSizes,
+  centroids,
+}) {
   return (
     <div className="cluster-explorer-sidebar">
       <h3 className="cluster-explorer-sidebar-title">Selected Centroid</h3>
@@ -347,6 +375,7 @@ function SideBar({ embeddingType, selectedCentroid, clusterSizes }) {
           embeddingType={embeddingType}
           selectedCentroid={selectedCentroid}
           clusterSizes={clusterSizes}
+          centroids={centroids}
         />
       </div>
     </div>
@@ -555,6 +584,7 @@ export default function App() {
           }}
         >
           <color attach="background" args={["#111"]} />
+          <ThreeDGrid />
           <PointCloudWithHighlight
             centroids={centroids}
             clusterSizes={clusterSizes}
@@ -587,6 +617,7 @@ export default function App() {
           embeddingType={embeddingType}
           selectedCentroid={selectedCentroid}
           clusterSizes={clusterSizes}
+          centroids={centroids}
         />
       </div>
     </>
