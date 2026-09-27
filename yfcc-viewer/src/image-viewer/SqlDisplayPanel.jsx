@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getErrorMessage } from "./utils";
+import { getErrorMessage } from "../utils";
 
 export default function SqlDisplayPanel({
   query,

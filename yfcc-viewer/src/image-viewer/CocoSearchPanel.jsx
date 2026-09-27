@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { getErrorMessage } from "./utils";
+import { getErrorMessage } from "../utils";
 import buildSystemPrompt from "./sqlPrompt";
 
 export default function CocoSearchPanel({
