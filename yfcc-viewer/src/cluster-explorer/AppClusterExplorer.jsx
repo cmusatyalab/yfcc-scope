@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Color, Vector3 } from "three";
+import ImageUpload from "../components/ImageUpload";
 import "./AppClusterExplorer.css";
 
 // Read API base from env
@@ -541,6 +542,7 @@ export default function App() {
   const [selectedBucket, setSelectedBucket] = useState(null);
   const [selectedCentroid, setSelectedCentroid] = useState(null);
   const [embeddingType, setEmbeddingType] = useState("clip");
+  const [uploadedImage, setUploadedImage] = useState(null);
 
   useEffect(() => {
     async function loadData() {
@@ -633,6 +635,13 @@ export default function App() {
             selectedBucket={selectedBucket}
             setSelectedBucket={setSelectedBucket}
           />
+          <div className="cluster-explorer-options">
+            <div className="cluster-explorer-options-title">Upload Image</div>
+            <ImageUpload
+              file={uploadedImage}
+              setFile={setUploadedImage}
+            />
+          </div>
         </div>
 
         <SideBar

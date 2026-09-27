@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState } from "react";
 import { getErrorMessage } from "./utils";
+import ImageUpload from "../components/ImageUpload";
 
 export default function ClipSearchPanel({
   query,
@@ -11,14 +12,11 @@ export default function ClipSearchPanel({
 }) {
   const [inputType, setInputType] = useState("text");
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
   const [reqLoading, setReqLoading] = useState(false);
   const [createScope, setCreateScope] = useState(false);
   const [scopeSize, setScopeSize] = useState(200000);
   const [scopeName, setScopeName] = useState("");
   const [createScopeLoading, setCreateScopeLoading] = useState(false);
-  const fileInputRef = useRef(null);
-  const dropZoneRef = useRef(null);
 
   const handleClipText = async () => {
     try {
@@ -143,59 +141,6 @@ export default function ClipSearchPanel({
     await (inputType === "image" ? handleScopeImage() : handleScopeText());
   };
 
-  const showFile = useCallback((file) => {
-    if (!file || !file.type.startsWith("image/")) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  }, []);
-
-  const clearImage = useCallback(() => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImageFile(null);
-    setImagePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [imagePreview]);
-
-  const handleFilePick = useCallback(
-    (e) => {
-      showFile(e.target.files[0]);
-    },
-    [showFile],
-  );
-
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    if (dropZoneRef.current) dropZoneRef.current.classList.add("drag-over");
-  }, []);
-
-  const handleDragLeave = useCallback(() => {
-    if (dropZoneRef.current) dropZoneRef.current.classList.remove("drag-over");
-  }, []);
-
-  const handleDrop = useCallback(
-    (e) => {
-      e.preventDefault();
-      if (dropZoneRef.current)
-        dropZoneRef.current.classList.remove("drag-over");
-      showFile(e.dataTransfer.files[0]);
-    },
-    [showFile],
-  );
-
-  useEffect(() => {
-    if (inputType !== "image") return;
-    const handler = (e) => {
-      for (const item of e.clipboardData?.items || []) {
-        if (item.type.startsWith("image/")) {
-          showFile(item.getAsFile());
-          break;
-        }
-      }
-    };
-    document.addEventListener("paste", handler);
-    return () => document.removeEventListener("paste", handler);
-  }, [inputType, showFile]);
-
   return (
     <>
       <div className="input-row">
@@ -234,54 +179,7 @@ export default function ClipSearchPanel({
       {inputType === "image" && (
         <div className="input-row">
           <label className="query-label">Upload Image:</label>
-          <div>
-            {!imagePreview && (
-              <div
-                className={"upload-zone" + (imagePreview ? " hidden" : "")}
-                ref={dropZoneRef}
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <p className="upload-title">
-                  Drag & drop / Paste from clipboard / Click to browse
-                </p>
-                <p className="upload-sub">Supported formats: PNG, JPG, WebP</p>
-              </div>
-            )}
-
-            {imagePreview && (
-              <div className="preview-area">
-                <img
-                  className="preview-thumb"
-                  src={imagePreview}
-                  alt="preview"
-                />
-                <div className="preview-meta">
-                  <p className="preview-name">{imageFile?.name || ""}</p>
-                  <p className="preview-size">
-                    {imageFile
-                      ? (imageFile.size / 1024).toFixed(0) +
-                        " KB · " +
-                        imageFile.type
-                      : ""}
-                  </p>
-                </div>
-                <button className="preview-clear" onClick={clearImage}>
-                  Clear
-                </button>
-              </div>
-            )}
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={handleFilePick}
-            />
-          </div>
+          <ImageUpload file={imageFile} setFile={setImageFile} />
         </div>
       )}
 
