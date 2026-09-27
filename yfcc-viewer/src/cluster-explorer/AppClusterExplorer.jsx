@@ -2,24 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Color, Vector3 } from "three";
-import ImageUpload from "../components/ImageUpload";
+import ImageNearestCentroids from "./ImageNearestCentroids";
+import { getErrorMessage } from "../utils";
 import "./AppClusterExplorer.css";
 
 // Read API base from env
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const API_PREFIX = `${API_BASE}/api`;
-
-async function extractErrorMessage(response) {
-  try {
-    const body = await response.json();
-    if (body && typeof body.error === "string" && body.error.trim()) {
-      return body.error;
-    }
-  } catch {
-    // Body is not JSON or does not contain an error message, ignore
-  }
-  return response.statusText || `HTTP ${response.status}`;
-}
 
 // Fetch the 3D PCA centroids from the API
 async function fetchPca3dCentroids(embeddingType) {
@@ -28,7 +17,7 @@ async function fetchPca3dCentroids(embeddingType) {
   );
   if (!response.ok) {
     throw new Error(
-      `Failed to load centroids: ${await extractErrorMessage(response)}`,
+      `Failed to load centroids: ${await getErrorMessage(response)}`,
     );
   }
   return await response.json();
@@ -41,7 +30,7 @@ async function fetchClusterSizes(embeddingType) {
   );
   if (!response.ok) {
     throw new Error(
-      `Failed to load cluster sizes: ${await extractErrorMessage(response)}`,
+      `Failed to load cluster sizes: ${await getErrorMessage(response)}`,
     );
   }
   return await response.json();
@@ -53,7 +42,7 @@ async function fetchClusterImageId(embeddingType, clusterIndex) {
   );
   if (!response.ok) {
     throw new Error(
-      `Failed to load cluster image indexes: ${await extractErrorMessage(response)}`,
+      `Failed to load cluster image indexes: ${await getErrorMessage(response)}`,
     );
   }
   return await response.json();
@@ -542,7 +531,6 @@ export default function App() {
   const [selectedBucket, setSelectedBucket] = useState(null);
   const [selectedCentroid, setSelectedCentroid] = useState(null);
   const [embeddingType, setEmbeddingType] = useState("clip");
-  const [uploadedImage, setUploadedImage] = useState(null);
 
   useEffect(() => {
     async function loadData() {
@@ -635,13 +623,7 @@ export default function App() {
             selectedBucket={selectedBucket}
             setSelectedBucket={setSelectedBucket}
           />
-          <div className="cluster-explorer-options">
-            <div className="cluster-explorer-options-title">Upload Image</div>
-            <ImageUpload
-              file={uploadedImage}
-              setFile={setUploadedImage}
-            />
-          </div>
+          <ImageNearestCentroids embeddingType={embeddingType} />
         </div>
 
         <SideBar

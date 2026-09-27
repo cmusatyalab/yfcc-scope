@@ -1,0 +1,26 @@
+.slider-control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  align-items: center;
+  width: 100%;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+}
+
+.slider-label {
+  grid-column: 1 / -1;
+}
+
+.slider-input {
+  width: 100%;
+  accent-color: rgba(255, 255, 255, 0.8);
+}
+
+.slider-value {
+  min-width: 20px;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+}

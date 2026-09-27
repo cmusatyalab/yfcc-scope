@@ -52,6 +52,30 @@
   pointer-events: auto;
 }
 
+.cluster-explorer-image-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.cluster-explorer-image-title-row .cluster-explorer-options-title {
+  margin-top: 8px;
+}
+
+.cluster-explorer-image-title-row .cluster-explorer-centroid-submit {
+  height: 28px;
+}
+
+.cluster-explorer-nearest-results {
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .cluster-explorer-options-title {
   margin-bottom: 8px;
   font-size: 12px;
