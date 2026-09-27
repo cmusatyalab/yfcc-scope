@@ -23,7 +23,7 @@ def _load_pca_data(embedding_type: str):
     if pca_cluster_data.get(embedding_type):
         return
 
-    if not embedding_type in ["clip", "dinov3"]:
+    if not embedding_type in ["clip", "dinov3", "clip-2", "dinov3-2"]:
         raise FileNotFoundError(f"Unknown embedding type: {embedding_type}")
 
     log.info(f"Loading {embedding_type} data")
@@ -31,7 +31,7 @@ def _load_pca_data(embedding_type: str):
     assignments = np.load(BASE_DIR / embedding_type / f"{METHOD}_assignments.npy")
     inverted_index_indptr = np.load(BASE_DIR / embedding_type / f"{METHOD}_inverted_index_indptr.npy")
     inverted_index_order = np.load(BASE_DIR / embedding_type / f"{METHOD}_inverted_index_order.npy")
-    with open(BASE_DIR / "image_id_list.json") as f:
+    with open(BASE_DIR / embedding_type / "image_id_list.json") as f:
         image_id_list = json.load(f)
 
     n_clusters = pca3d_centroids.shape[0]

@@ -409,6 +409,28 @@ function EmbeddingOptions({ embeddingType, setEmbeddingType }) {
         >
           DINOv3
         </button>
+        <button
+          type="button"
+          className={`cluster-explorer-options-button${
+            embeddingType === "clip-2" ? " is-active" : ""
+          }`}
+          onClick={() => setEmbeddingType("clip-2")}
+          aria-pressed={embeddingType === "clip-2"}
+          aria-label="Use CLIP-cleaned embeddings"
+        >
+          CLIP-cleaned
+        </button>
+        <button
+          type="button"
+          className={`cluster-explorer-options-button${
+            embeddingType === "dinov3-2" ? " is-active" : ""
+          }`}
+          onClick={() => setEmbeddingType("dinov3-2")}
+          aria-pressed={embeddingType === "dinov3-2"}
+          aria-label="Use DINOv3-cleaned embeddings"
+        >
+          DINOv3-cleaned
+        </button>
       </div>
     </div>
   );
