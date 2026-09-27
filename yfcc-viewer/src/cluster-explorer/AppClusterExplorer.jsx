@@ -79,11 +79,11 @@ function ThreeDGrid() {
 }
 
 const BUCKET_COLOR_HEX = [
-  "#d55e00",
-  "#e69f00",
-  "#009e73",
-  "#0072b2",
-  "#9f61d4",
+  "#ff7f0e",
+  "#f9c448",
+  "#15c394",
+  "#3ca1f4",
+  "#c77dff",
 ];
 
 const BUCKET_COLORS = BUCKET_COLOR_HEX.map((hex) => {
@@ -178,7 +178,7 @@ function PointCloudWithHighlight({
       <PointsLayer
         positions={basePoints.positions}
         colors={basePoints.colors}
-        size={0.05}
+        size={0.08}
         opacity={selectedBucket === null ? 1 : 0.5}
         depthWrite={true}
         renderOrder={1}
@@ -191,7 +191,7 @@ function PointCloudWithHighlight({
         <>
           <PointsLayer
             positions={highlightedPoints.positions}
-            size={0.15}
+            size={0.2}
             color="#ffffff"
             opacity={0.7}
             depthWrite={true}

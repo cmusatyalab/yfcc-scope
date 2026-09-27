@@ -109,7 +109,7 @@
   white-space: nowrap;
 }
 .toggle-btn.active {
-  background: #2e2e2e;
+  background: rgba(255,255,255,.1);
   color: #f0f0f0;
 }
 .toggle-btn i {
@@ -118,8 +118,8 @@
 
 .toggle-pill {
   display: inline-flex;
-  background: #1e1e1e;
-  border: 0.5px solid #363a38;
+  background: #ffffff0d;
+  border: 0.5px solid  rgba(255, 255, 255, .1);
   border-radius: 9999px;
   padding: 3px;
   gap: 2px;
@@ -169,8 +169,8 @@
   display: flex;
   border-radius: 8px;
   overflow: hidden;
-  border: 0.5px solid #363a38;
-  background: #181818;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  background: #ffffff0d;
   padding: 10px;
   align-items: center;
   gap: 12px;
