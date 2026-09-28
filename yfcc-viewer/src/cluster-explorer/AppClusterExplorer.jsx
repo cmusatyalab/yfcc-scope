@@ -90,15 +90,14 @@ function sizeToRgb(size) {
   return BUCKET_COLORS[sizeToBucket(size)];
 }
 
-function buildPointData(centroids, clusterSizes, bucketFilter = null) {
+function buildPointData(centroids, clusterSizes, filter = null) {
   const positions = [];
   const colors = [];
 
   for (let i = 0; i < centroids.length; i++) {
     const size = Number(clusterSizes[i]);
-    const bucket = sizeToBucket(size);
 
-    if (bucketFilter !== null && bucket !== bucketFilter) {
+    if (filter !== null && !filter(i)) {
       continue;
     }
 
@@ -119,7 +118,7 @@ function PointsLayer({
   colors,
   size,
   color,
-  opacity,
+  opacity = 1,
   depthWrite,
   renderOrder,
   onPointClick,
@@ -137,7 +136,7 @@ function PointsLayer({
         color={color}
         vertexColors={colors ? true : undefined}
         sizeAttenuation
-        transparent={opacity < 1}
+        transparent={true}
         opacity={opacity}
         depthWrite={depthWrite}
       />
@@ -146,30 +145,16 @@ function PointsLayer({
 }
 
 function PointCloudWithHighlight({
-  centroids,
-  clusterSizes,
-  selectedBucket,
+  basePoints,
+  highlightedPoints,
   setSelectedCentroid,
 }) {
-  const basePoints = useMemo(
-    () => buildPointData(centroids, clusterSizes),
-    [centroids, clusterSizes],
-  );
-  const highlightedPoints = useMemo(
-    () =>
-      selectedBucket === null
-        ? null
-        : buildPointData(centroids, clusterSizes, selectedBucket),
-    [centroids, clusterSizes, selectedBucket],
-  );
-
   return (
     <>
       <PointsLayer
         positions={basePoints.positions}
         colors={basePoints.colors}
         size={0.08}
-        opacity={selectedBucket === null ? 1 : 0.5}
         depthWrite={true}
         renderOrder={1}
         onPointClick={(event) => {
@@ -183,7 +168,7 @@ function PointCloudWithHighlight({
             positions={highlightedPoints.positions}
             size={0.2}
             color="#ffffff"
-            opacity={0.7}
+            opacity={0.6}
             depthWrite={true}
             renderOrder={0}
           />
@@ -351,12 +336,7 @@ function SideBarContent({
   );
 }
 
-function SideBar({
-  embeddingType,
-  selectedCentroid,
-  clusterSizes,
-  centroids,
-}) {
+function SideBar({ embeddingType, selectedCentroid, clusterSizes, centroids }) {
   return (
     <div className="cluster-explorer-sidebar">
       <h3 className="cluster-explorer-sidebar-title">Selected Centroid</h3>
@@ -530,6 +510,7 @@ export default function App() {
   const [loadError, setLoadError] = useState("");
   const [selectedBucket, setSelectedBucket] = useState(null);
   const [selectedCentroid, setSelectedCentroid] = useState(null);
+  const [nearestCentroidIds, setNearestCentroidIds] = useState([]);
   const [embeddingType, setEmbeddingType] = useState("clip");
 
   useEffect(() => {
@@ -538,6 +519,7 @@ export default function App() {
       setLoadError("");
       setSelectedBucket(null);
       setSelectedCentroid(null);
+      setNearestCentroidIds([]);
 
       try {
         const centroids = await fetchPca3dCentroids(embeddingType);
@@ -564,6 +546,30 @@ export default function App() {
 
     loadData();
   }, [embeddingType]);
+
+  const basePoints = useMemo(
+    () => buildPointData(centroids, clusterSizes),
+    [centroids, clusterSizes],
+  );
+
+  const highlightedPoints = useMemo(() => {
+    if (selectedBucket === null && nearestCentroidIds.length === 0) {
+      return null;
+    }
+
+    if (nearestCentroidIds.length > 0) {
+      const nearestCentroidIdSet = new Set(nearestCentroidIds.map(Number));
+      return buildPointData(centroids, clusterSizes, (centroidId) =>
+        nearestCentroidIdSet.has(centroidId),
+      );
+    }
+
+    return buildPointData(
+      centroids,
+      clusterSizes,
+      (centroidId) => sizeToBucket(clusterSizes[centroidId]) === selectedBucket,
+    );
+  }, [centroids, clusterSizes, nearestCentroidIds, selectedBucket]);
 
   if (loadError) {
     return (
@@ -598,8 +604,8 @@ export default function App() {
           <color attach="background" args={["#111"]} />
           <ThreeDGrid />
           <PointCloudWithHighlight
-            centroids={centroids}
-            clusterSizes={clusterSizes}
+            basePoints={basePoints}
+            highlightedPoints={highlightedPoints}
             selectedBucket={selectedBucket}
             setSelectedCentroid={setSelectedCentroid}
           />
@@ -623,7 +629,11 @@ export default function App() {
             selectedBucket={selectedBucket}
             setSelectedBucket={setSelectedBucket}
           />
-          <ImageNearestCentroids embeddingType={embeddingType} />
+          <ImageNearestCentroids
+            embeddingType={embeddingType}
+            nearestCentroidIds={nearestCentroidIds}
+            setNearestCentroidIds={setNearestCentroidIds}
+          />
         </div>
 
         <SideBar

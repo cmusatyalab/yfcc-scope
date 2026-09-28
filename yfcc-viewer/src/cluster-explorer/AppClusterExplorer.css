@@ -69,6 +69,7 @@
 }
 
 .cluster-explorer-nearest-results {
+  max-width: 400px;
   margin-top: 10px;
   color: rgba(255, 255, 255, 0.72);
   font-size: 11px;

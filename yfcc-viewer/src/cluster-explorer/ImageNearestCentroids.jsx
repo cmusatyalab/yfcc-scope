@@ -6,10 +6,13 @@ import { getErrorMessage } from "../utils";
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const API_PREFIX = `${API_BASE}/api`;
 
-export default function ImageNearestCentroids({ embeddingType }) {
+export default function ImageNearestCentroids({
+  embeddingType,
+  nearestCentroidIds,
+  setNearestCentroidIds,
+}) {
   const [uploadedImage, setUploadedImage] = useState(null);
   const [nearestCentroidCount, setNearestCentroidCount] = useState(5);
-  const [nearestCentroidIds, setNearestCentroidIds] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
