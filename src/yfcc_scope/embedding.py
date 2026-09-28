@@ -95,7 +95,7 @@ def _load_dino_model():
     _dino_model = _dino_model.to(_device)
 
 
-def dino_image_features(image_bytes):
+def dinov3_image_features(image_bytes):
     _load_dino_model()
 
     img = Image.open(BytesIO(image_bytes)).convert("RGB")
