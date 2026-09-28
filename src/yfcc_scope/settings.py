@@ -21,6 +21,9 @@ try:
     DB_PORT: int = config.get("DB_PORT", default=5432)
 
     MAX_LIMIT: int = config.get("MAX_LIMIT", default=500)
+    DINOV3_REPO_DIR: str = config.get(
+        "DINOV3_REPO_DIR", default="/home/ubuntu/dinov3"
+    )
 
     SESSION_KEY = Secret(secrets.token_urlsafe())
     SCOPE_API_KEY: Secret | str = config(

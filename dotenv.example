@@ -11,6 +11,9 @@ DB_PORT=5432
 # the database in a single query (defaults to 500)
 MAX_LIMIT=500
 
+# Local DINOv3 repository used by the image-nearest-centroid endpoint
+DINOV3_REPO_DIR=/home/ubuntu/dinov3
+
 # Hawk Scope server related settings
 # Base URL and API keys of the Hawk Scope server
 SCOPE_BASE=

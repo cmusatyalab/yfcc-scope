@@ -6,13 +6,9 @@ from __future__ import annotations
 import datetime
 import json
 import urllib.parse
-from io import BytesIO
 
 import numpy as np
-import open_clip
 import requests
-import torch
-from PIL import Image
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import (
@@ -33,6 +29,7 @@ from .db import (
     search_clip_images,
     vector_rows_sync,
 )
+from .embedding import clip_image_features, clip_text_features
 from .log import log
 from .scope.app import image_url
 from .settings import MAX_LIMIT, SCOPE_BASE
@@ -42,15 +39,6 @@ from .utils import (
     sanitize_scope_name,
     validate_sql,
 )
-
-# Load CLIP model and tokenizer once at startup
-_model, _preprocess, _ = open_clip.create_model_and_transforms(
-    "ViT-B-32", pretrained="laion2b_s34b_b79k"
-)
-_model.eval()
-_tokenizer = open_clip.get_tokenizer("ViT-B-32")
-_device = "cuda" if torch.cuda.is_available() else "cpu"
-_model = _model.to(_device)
 
 
 def _parse_limit_offset(qp, default_limit, max_limit):
@@ -68,28 +56,11 @@ def _parse_limit_offset(qp, default_limit, max_limit):
     return limit, offset
 
 
-def _compute_text_features(texts):
-    text_input = _tokenizer(texts).to(_device)
-    with torch.no_grad(), torch.autocast(_device):
-        text_feat = _model.encode_text(text_input)
-        text_feat = text_feat / text_feat.norm(dim=-1, keepdim=True)
-    return text_feat.float().cpu().numpy().astype(np.float16, copy=False)
-
-
-def _compute_image_features(image_bytes):
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    img_tensor = _preprocess(img).unsqueeze(0).to(_device)
-    with torch.no_grad(), torch.autocast(_device):
-        img_feat = _model.encode_image(img_tensor)
-        img_feat = img_feat / img_feat.norm(dim=-1, keepdim=True)
-    return img_feat.float().cpu().numpy().astype(np.float16, copy=False)
-
-
 def _compute_clip_query(is_text, source, limit, search_fn):
     if is_text:
-        feat = _compute_text_features([source])[0]
+        feat = clip_text_features([source])[0]
     else:
-        feat = _compute_image_features(source)[0]
+        feat = clip_image_features(source)[0]
 
     embedding_list = feat.astype(np.float32).tolist()
     rows = search_fn(feat, limit)
