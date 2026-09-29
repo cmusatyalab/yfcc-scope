@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Color, Vector3 } from "three";
 import ImageNearestCentroids from "./ImageNearestCentroids";
+import ToggleSwitch from "../components/ToggleSwitch";
 import { getErrorMessage } from "../utils";
 import "./AppClusterExplorer.css";
 
@@ -147,6 +148,7 @@ function PointsLayer({
 function PointCloudWithHighlight({
   basePoints,
   highlightedPoints,
+  showHighlight,
   setSelectedCentroid,
 }) {
   return (
@@ -162,7 +164,7 @@ function PointCloudWithHighlight({
           setSelectedCentroid(event.index);
         }}
       />
-      {highlightedPoints ? (
+      {showHighlight && highlightedPoints ? (
         <>
           <PointsLayer
             positions={highlightedPoints.positions}
@@ -503,12 +505,28 @@ function SizeLegend({ selectedBucket, setSelectedBucket }) {
   );
 }
 
+function HighlightOptions({ showHighlight, setShowHighlight }) {
+  return (
+    <div className="cluster-explorer-options">
+      <div className="cluster-explorer-highlight-toggle">
+        <div className="cluster-explorer-options-title">Show highlight</div>
+        <ToggleSwitch
+          checked={showHighlight}
+          onChange={setShowHighlight}
+          label="Show highlight"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [centroids, setCentroids] = useState([]);
   const [clusterSizes, setClusterSizes] = useState([]);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedBucket, setSelectedBucket] = useState(null);
+  const [showHighlight, setShowHighlight] = useState(true);
   const [selectedCentroid, setSelectedCentroid] = useState(null);
   const [nearestCentroidIds, setNearestCentroidIds] = useState([]);
   const [embeddingType, setEmbeddingType] = useState("clip");
@@ -606,7 +624,7 @@ export default function App() {
           <PointCloudWithHighlight
             basePoints={basePoints}
             highlightedPoints={highlightedPoints}
-            selectedBucket={selectedBucket}
+            showHighlight={showHighlight}
             setSelectedCentroid={setSelectedCentroid}
           />
           <KeyboardCameraControls
@@ -625,10 +643,16 @@ export default function App() {
             selectedCentroid={selectedCentroid}
             setSelectedCentroid={setSelectedCentroid}
           />
-          <SizeLegend
-            selectedBucket={selectedBucket}
-            setSelectedBucket={setSelectedBucket}
-          />
+          <div className="cluster-explorer-legend-row">
+            <SizeLegend
+              selectedBucket={selectedBucket}
+              setSelectedBucket={setSelectedBucket}
+            />
+            <HighlightOptions
+              showHighlight={showHighlight}
+              setShowHighlight={setShowHighlight}
+            />
+          </div>
           <ImageNearestCentroids
             embeddingType={embeddingType}
             nearestCentroidIds={nearestCentroidIds}

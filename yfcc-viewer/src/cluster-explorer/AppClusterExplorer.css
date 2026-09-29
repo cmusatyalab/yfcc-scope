@@ -52,6 +52,34 @@
   pointer-events: auto;
 }
 
+.cluster-explorer-legend-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.cluster-explorer-legend-row .cluster-explorer-options:first-child {
+  width: 220px;
+}
+
+.cluster-explorer-legend-row .cluster-explorer-options:last-child {
+  min-width: 140px;
+  width: 140px;
+}
+
+.cluster-explorer-highlight-toggle {
+  width: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
+}
+
+.cluster-explorer-highlight-toggle .cluster-explorer-options-title {
+  margin: 0;
+}
+
 .cluster-explorer-image-title-row {
   display: flex;
   align-items: center;

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { getErrorMessage } from "../utils";
 import ImageUpload from "../components/ImageUpload";
+import ToggleSwitch from "../components/ToggleSwitch";
 
 export default function ClipSearchPanel({
   query,
@@ -185,15 +186,11 @@ export default function ClipSearchPanel({
 
       <div className="input-row">
         <label>Create scope</label>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={createScope}
-          className={"toggle-switch" + (createScope ? " on" : "")}
-          onClick={() => setCreateScope((v) => !v)}
-        >
-          <span className="toggle-knob" />
-        </button>
+        <ToggleSwitch
+          checked={createScope}
+          onChange={setCreateScope}
+          label="Create scope"
+        />
       </div>
 
       {createScope && (
