@@ -12,6 +12,7 @@ dependencies = [
     "open-clip-torch>=3.3.0",
     "pgvector>=0.5.0",
     "pillow>=12.3.0",
+    "polars[numpy,pyarrow,rt64]>=1.44.2",
     "psycopg2-binary>=2.9.12",
     "python-multipart>=0.0.32",
     "requests>=2.34.2",
