@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from importlib.resources import files
 
-from starlette.applications import Starlette
+from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from starlette.routing import Mount, Route
@@ -20,6 +20,7 @@ from .bboxviewer.app import (
 from .cluster_centroids_pca3d.app import (
     api_routes as cluster_centroids_api,
 )
+from .clusters.app import router as clusters_router
 from .log import setup_logging
 from .routes import (
     clip_image_query,
@@ -73,11 +74,12 @@ routes = [
     Mount("/image", routes=image_routes),
 ]
 
-app = Starlette(
+app = FastAPI(
     routes=routes,
     middleware=scope_middleware,
     lifespan=scope_lifespan,
 )
+app.include_router(clusters_router, prefix="/clustered-scope")
 
 # Redirect React frontend application links
 viewer_dir = files("yfcc_scope") / "dist"

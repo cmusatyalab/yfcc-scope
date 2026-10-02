@@ -188,7 +188,7 @@ async def get_items_in_scope(
 
 
 async def get_items_by_id(
-    object_keys: list[str],
+    object_keys: AsyncIterable[str],
 ) -> AsyncIterator[tuple[str, int, int]]:
     async with AsyncSession(engine) as session:
         async for batch in batched(object_keys, 1000):
