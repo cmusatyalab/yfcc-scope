@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 DB_URL = URL.create(
     "postgresql+asyncpg",
     username=DB_USER,
-    password=DB_PASSWORD,
+    password=str(DB_PASSWORD),
     host=DB_HOST,
     port=DB_PORT,
     database=DB_NAME,

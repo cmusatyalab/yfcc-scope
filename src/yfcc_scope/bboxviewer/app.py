@@ -6,20 +6,13 @@ from __future__ import annotations
 import logging
 from importlib.resources import files
 from io import BytesIO
+from typing import Annotated, Any
 
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from PIL import Image, ImageDraw
-from starlette.applications import Starlette
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
-from starlette.responses import (
-    HTMLResponse,
-    JSONResponse,
-    PlainTextResponse,
-    Response,
-)
-from starlette.routing import Mount, Route
-from starlette.staticfiles import StaticFiles
-from starlette.templating import Jinja2Templates
 
 from ..constants import LABELS
 from ..scope.slicer import get_image_by_id
@@ -37,31 +30,36 @@ log = logging.getLogger(__name__)
 TEMPLATES_DIR = files("yfcc_scope") / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+router = APIRouter(tags=["bboxviewer"])
+router.mount(
+    "/static",
+    StaticFiles(packages=[("yfcc_scope", "static")]), 
+    name="static",
+)
 
-def clip(value: float, minv: float = 0.0, maxv: float = 1.0) -> float:
-    return max(minv, min(maxv, value))
 
-
-async def boxviewer(request: Request) -> HTMLResponse:
-    qp = request.query_params
-    image_file_id = qp.get("image_file_id", "")
-    selected = set(qp.getlist("label"))
-    all_checked = qp.get("select_all", "1") == "1"
-    min_conf = clip(float(qp.get("min_conf", "0.4")), minv=0.4)
+@router.get("/", response_class=HTMLResponse, name="bboxviewer")
+async def boxviewer(
+    request: Request,
+    image_file_id: str = "",
+    label: list[str] | None = None,
+    select_all: bool = True,
+    min_conf: Annotated[float, Query(ge=0.4, le=1.0)] = 0.4,
+) -> HTMLResponse:
+    selected = set(label or [])
 
     img_src = (
         request.url_for("bbox_image").replace(query=request.url.query)
         if image_file_id
         else None
     )
-
     return templates.TemplateResponse(
         request,
         "index.html",
         {
             "image_file_id": image_file_id,
-            "all_checked": all_checked,
-            "select_all_val": "1" if all_checked else "0",
+            "all_checked": select_all,
+            "select_all_val": "1" if select_all else "0",
             "min_conf": f"{min_conf:.2f}",
             "min_conf_fmt": f"{min_conf:.2f}",
             "labels": LABELS,
@@ -71,12 +69,18 @@ async def boxviewer(request: Request) -> HTMLResponse:
     )
 
 
-async def image(request: Request) -> Response:
-    qp = request.query_params
-    image_file_id = qp.get("image_file_id", "")
-    all_checked = qp.get("select_all", "1") == "1"
-    selected = set(qp.getlist("label"))
-    min_conf = clip(float(qp.get("min_conf", "0.4")), minv=0.4)
+class PngResponse(Response):
+    media_type = "image/png"
+
+
+@router.get("/image", response_class=PngResponse, name="bbox_image")
+async def bbox_image(
+    image_file_id: str = "",
+    select_all: bool = True,
+    label: list[str] | None = None,
+    min_conf: Annotated[float, Query(ge=0.4, le=1.0)] = 0.4,
+) -> PngResponse:
+    selected = set(label or [])
 
     image_file_id = image_file_id.split("_", 1)[0]
 
@@ -101,7 +105,7 @@ async def image(request: Request) -> Response:
     for n, label, cx, cy, w, h, conf in bboxes:
         if conf is None or conf < min_conf:
             continue
-        if not all_checked and label not in selected:
+        if not select_all and label not in selected:
             continue
         x0 = (cx - w / 2) * W
         x1 = (cx + w / 2) * W
@@ -114,13 +118,13 @@ async def image(request: Request) -> Response:
 
     with BytesIO() as buf:
         img.save(buf, "PNG")
-        return Response(buf.getvalue(), media_type="image/png")
+        return PngResponse(content=buf.getvalue())
 
 
-async def freqs_api(request: Request) -> JSONResponse:
-    qp = request.query_params
-    min_conf = clip(float(qp.get("min_conf", "0.4")), minv=0.4)
-
+@router.get("/freqs", name="freqs")
+async def freqs(
+    min_conf: Annotated[float, Query(ge=0.4, le=1.0)] = 0.4,
+) -> dict[str, Any]:
     counts, total_boxes, updated_at = await read_label_counts_at_threshold(min_conf)
     images_with_boxes = await read_images_with_boxes_at_threshold(min_conf)
     total_images_yfcc = await read_total_images_yfcc()
@@ -131,37 +135,20 @@ async def freqs_api(request: Request) -> JSONResponse:
         frac = (float(cnt) / float(total_boxes)) if total_boxes else 0.0
         labels_payload[lab] = {"fraction": frac}
 
-    return JSONResponse(
-        {
-            "updated_at": updated_at,
-            "total_images_yfcc": total_images_yfcc,
-            "images_with_boxes": images_with_boxes,
-            "min_conf": f"{min_conf:.2f}",
-            "labels": labels_payload,
-        }
-    )
+    return {
+        "updated_at": updated_at,
+        "total_images_yfcc": total_images_yfcc,
+        "images_with_boxes": images_with_boxes,
+        "min_conf": f"{min_conf:.2f}",
+        "labels": labels_payload,
+    }
 
 
-async def recalc_freqs(request: Request) -> PlainTextResponse:
-    await rebuild_histograms()
-    return PlainTextResponse("ok (histogram rebuilt)")
+@router.post("/recalc_freqs", response_class=PlainTextResponse)
+async def recalc_freqs() -> str:
     try:
-        pass
+        await rebuild_histograms()
+        return "ok (histogram rebuilt)"
     except Exception as err:
         msg = "Recalc histogram failed"
         raise HTTPException(status_code=500, detail=msg) from err
-
-
-routes = [
-    Route("/", boxviewer, name="bboxviewer"),
-    Route("/image", image, name="bbox_image"),
-    Mount("/static", StaticFiles(packages=[("yfcc_scope", "static")]), name="static"),
-]
-api_routes = [
-    Route("/freqs", freqs_api, name="freqs"),
-    Route("/recalc_freqs", recalc_freqs, methods=["POST"], name="recalc_freqs"),
-]
-
-
-app = Starlette(routes=routes)
-app.mount("/api", api_routes)

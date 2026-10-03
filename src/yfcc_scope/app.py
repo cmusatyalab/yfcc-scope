@@ -4,22 +4,14 @@
 from __future__ import annotations
 
 from importlib.resources import files
+from pathlib import Path
 
 from fastapi import FastAPI
-from starlette.requests import Request
-from starlette.responses import RedirectResponse
+from fastapi.responses import RedirectResponse
 from starlette.routing import Mount, Route
-from starlette.staticfiles import StaticFiles
 
-from .bboxviewer.app import (
-    api_routes as bboxviewer_api,
-)
-from .bboxviewer.app import (
-    routes as bboxviewer,
-)
-from .cluster_centroids_pca3d.app import (
-    router as cluster_centroids_router,
-)
+from .bboxviewer.app import router as bboxviewer_router
+from .cluster_centroids_pca3d.app import router as cluster_centroids_router
 from .clusters.app import router as clusters_router
 from .log import setup_logging
 from .routes import (
@@ -41,10 +33,6 @@ from .scope.app import image_router, scope_router
 setup_logging()
 
 
-async def home(request: Request) -> RedirectResponse:
-    return RedirectResponse(url="/image-viewer", status_code=302)
-
-
 api_routes = [
     Route("/images", images_api),
     Route("/conf_hist", conf_hist, methods=["GET"]),
@@ -57,15 +45,13 @@ api_routes = [
     Route("/create_scope_clip_text", create_scope_clip_text, methods=["POST"]),
     Route("/create_scope_clip_image", create_scope_clip_image, methods=["POST"]),
     Route("/download_zip", download_zip, methods=["POST"]),
-    *bboxviewer_api,
     # pulling routes out of fastapi.APIRouter is a hack we need until we have
     # all api endpoints converted to FastAPI
+    *bboxviewer_router.routes,
     *cluster_centroids_router.routes,
 ]
 routes = [
-    Route("/", home),
     Mount("/api", routes=api_routes),
-    Mount("/boxviewer", routes=bboxviewer),
     Route("/recalc_vectors", recalc_vectors, methods=["POST"]),
 ]
 
@@ -74,7 +60,14 @@ app.include_router(image_router, prefix="/image")
 app.include_router(clusters_router, prefix="/clustered-scope")
 app.include_router(scope_router, prefix="/scope")
 app.include_router(cluster_centroids_router, prefix="/api")
+app.include_router(bboxviewer_router, prefix="/boxviewer")
+
+
+@app.get("/", response_class=RedirectResponse)
+async def home() -> str:
+    return "/image-viewer"
+
 
 # Redirect React frontend application links
-viewer_dir = files("yfcc_scope") / "dist"
+viewer_dir = Path(str(files("yfcc_scope") / "dist"))
 app.frontend("/", directory=viewer_dir)
