@@ -4,116 +4,139 @@
 from __future__ import annotations
 
 import contextlib
+import secrets
 from collections.abc import AsyncIterator
 from importlib.resources import files
-from typing import TYPE_CHECKING
+from typing import Annotated
 
-from rich import print
-from starlette.applications import Starlette
-from starlette.authentication import (
-    AuthCredentials,
-    AuthenticationBackend,
-    AuthenticationError,
-    SimpleUser,
-    requires,
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
+from fastapi.responses import (
+    FileResponse,
+    PlainTextResponse,
+    Response,
+    StreamingResponse,
 )
-from starlette.middleware import Middleware
-from starlette.middleware.authentication import AuthenticationMiddleware
-from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
-from starlette.routing import Route
+from fastapi.security import APIKeyHeader
+from rich import print
+from starlette.datastructures import Secret
 
 from .. import settings
+from ..types import ClusterID, TarStreamingResponse, WIDSDescriptor
+from .db import delete_scope as db_delete_scope
 from .db import export_scope, get_items_in_scope, import_scope
 from .slicer import generate_shard, generate_wids_descriptor, get_image_by_id
 from .util import chunks_to_lines
 
-if TYPE_CHECKING:
-    from starlette.requests import Request
+
+class HTMLFileResponse(FileResponse):
+    media_type = "text/html"
 
 
-class APIKeyAuthBackend(AuthenticationBackend):
-    async def authenticate(self, conn):
-        if "X-API-Key" not in conn.headers:
-            return
+class JpegImage(Response):
+    media_type = "image/jpeg"
 
-        api_key = conn.headers["X-API-Key"]
-        if api_key != str(settings.SCOPE_API_KEY):
-            raise AuthenticationError("Invalid API key")
 
-        return AuthCredentials(["apikey"]), SimpleUser("API")
+apikey_scheme = APIKeyHeader(name="X-API-Key")
+
+
+async def require_apikey(api_key: Annotated[Secret, Depends(apikey_scheme)]) -> str:
+    is_correct_key = secrets.compare_digest(str(api_key), str(settings.SCOPE_API_KEY))
+    if not is_correct_key:
+        raise apikey_scheme.make_not_authenticated_error()
+    return "API"
 
 
 @contextlib.asynccontextmanager
-async def scope_lifespan(app: Starlette) -> AsyncIterator[None]:
+async def scope_lifespan(app: FastAPI) -> AsyncIterator[None]:
     if str(settings.SCOPE_API_KEY) == str(settings.SESSION_KEY):
         print(f"[red]NOTE:[/red]\t  Temporary API key is: {settings.SCOPE_API_KEY}")
     yield
     # cleanup
 
 
-async def root(request: Request) -> FileResponse:
-    animation = files("yfcc_scope").joinpath("scope", "webdataset-animation.html")
-    return FileResponse(str(animation), media_type="text/html")
+scope_router = APIRouter(lifespan=scope_lifespan)
+image_router = APIRouter()
 
 
-async def get_wids(request: Request) -> JSONResponse:
-    scope = request.path_params["scope"]
+@scope_router.get("/", response_class=HTMLFileResponse)
+async def animation() -> str:
+    animation = (
+        files("yfcc_scope").joinpath("scope").joinpath("webdataset-animation.html")
+    )
+    return str(animation)
+
+
+@scope_router.get("/{scope}.json", tags=["webdataset index"])
+async def get_webdataset_index(request: Request, scope: str) -> WIDSDescriptor:
+    """Return a WIDS descriptor for the scope."""
     base_url = str(request.base_url)
-    wids_descriptor = await generate_wids_descriptor(scope, base_url)
-    return JSONResponse(wids_descriptor)
+    return await generate_wids_descriptor(scope, base_url)
 
 
-async def get_shard(request: Request) -> StreamingResponse:
-    scope = request.path_params["scope"]
-    shard = request.path_params["shard"]
+@scope_router.get(
+    "/{scope}-{shard}.tar",
+    response_class=TarStreamingResponse,
+    tags=["webdataset shard"],
+)
+async def get_webdataset_shard(
+    scope: str, shard: Annotated[ClusterID, Path(ge=0)]
+) -> AsyncIterator[bytes]:
+    """Return a WebDataset shard for the scope."""
     items = get_items_in_scope(scope, shard)
-    object_stream = generate_shard(items)
-    return StreamingResponse(object_stream, media_type="application/x-tar")
+    async for chunk in generate_shard(items):
+        yield chunk
 
 
-async def get_scope(request: Request) -> StreamingResponse:
-    scope = request.path_params["scope"]
+@scope_router.get("/{scope}.scope", tags=["scope"])
+async def get_scope(scope: str) -> StreamingResponse:
+    """Retrieve all object identifiers in the scope."""
     items = (f"{key}\n" async for key in export_scope(scope))
     return StreamingResponse(items, media_type="text/plain")
 
 
-@requires("apikey")
-async def create_scope(request: Request) -> Response:
-    scope = request.path_params["scope"]
+@scope_router.post("/{scope}.scope", response_class=PlainTextResponse, tags=["scope"])
+async def create_scope(
+    request: Request, scope: str, apikey: Annotated[str, Depends(require_apikey)]
+) -> str:
+    """Create a new scope."""
     try:
         items = chunks_to_lines(request.stream())
         nitems = await import_scope(scope, items)
-        return Response(f'Created "{scope}" with {nitems} items', status_code=200)
+        return f'Created "{scope}" with {nitems} items'
     except FileExistsError as e:
         # scope already exists
-        return Response(e.args[0], status_code=409)
+        raise HTTPException(status_code=409, detail=e.args[0]) from None
     except (BufferError, UnicodeDecodeError):
         # unable to parse the request.body stream to object ids
-        return Response("Unable to process scope list", status_code=400)
+        raise HTTPException(
+            status_code=400, detail="Unable to process scope list"
+        ) from None
 
 
-@requires("apikey")
-async def delete_scope(request: Request) -> Response:
+@scope_router.delete("/{scope}.scope", status_code=204, tags=["scope"])
+async def delete_scope(
+    scope: str, apikey: Annotated[str, Depends(require_apikey)]
+) -> None:
+    """Delete a scope."""
     try:
-        scope = request.path_params["scope"]
-        await delete_scope(scope)
-        return Response(status_code=204)
+        await db_delete_scope(scope)
     except KeyError:
-        return Response(f'Scope "{scope}" not found', status_code=404)
+        raise HTTPException(
+            status_code=404, detail=f'Scope "{scope}" not found'
+        ) from None
 
 
-async def get_image(request: Request) -> Response:
+@image_router.get("/{image_id}.jpg", response_class=JpegImage, name="get_image")
+async def get_image(image_id: str) -> JpegImage:
+    """Return the image as jpeg."""
     try:
-        image_id = request.path_params["image_id"]
         image_id = image_id.split("_", 1)[0]
         image = await get_image_by_id(image_id)
-        return Response(
-            image,
-            media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+        return JpegImage(image, headers={"Cache-Control": "public, max-age=3600"})
     except KeyError:
-        return Response(f'Image "{image_id}" not found', status_code=404)
+        raise HTTPException(
+            status_code=404, detail=f'Image "{image_id}" not found'
+        ) from None
 
 
 def image_url(request: Request, image_id: str) -> str:
@@ -121,26 +144,6 @@ def image_url(request: Request, image_id: str) -> str:
     return str(request.url_for("get_image", image_id=image_id))
 
 
-scope_routes = [
-    Route("/", root),
-    Route("/{scope}.json", get_wids),
-    Route("/{scope}-{shard:int}.tar", get_shard, name="shard"),
-    Route("/{scope}.scope", get_scope),
-    Route("/{scope}.scope", create_scope, methods=["POST", "PUT"]),
-    Route("/{scope}.scope", delete_scope, methods=["DELETE"]),
-]
-
-image_routes = [
-    Route("/{image_id}.jpg", get_image, name="get_image"),
-]
-
-scope_middleware = [
-    Middleware(AuthenticationMiddleware, backend=APIKeyAuthBackend()),
-]
-
-app = Starlette(
-    debug=settings.DEBUG,
-    routes=[*scope_routes, *image_routes],
-    middleware=scope_middleware,
-    lifespan=scope_lifespan,
-)
+app = FastAPI()
+app.include_router(scope_router)
+app.include_router(image_router)

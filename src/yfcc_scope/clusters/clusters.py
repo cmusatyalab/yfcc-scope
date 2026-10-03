@@ -13,7 +13,13 @@ from fastapi import HTTPException
 
 from ..cluster_centroids_pca3d.app import BASE_DIR
 from ..scope.db import get_items_by_id
-from .types import ClusterID, Embeddings, EmbeddingType, WebDatasetShard, WIDSDescriptor
+from ..types import (
+    ClusterID,
+    Embeddings,
+    EmbeddingType,
+    WebDatasetShard,
+    WIDSDescriptor,
+)
 
 
 # should probably use a config setting to locate the directory containing

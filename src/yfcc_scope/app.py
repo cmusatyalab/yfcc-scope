@@ -36,12 +36,7 @@ from .routes import (
     run_query_count,
     vector_rows_api,
 )
-from .scope.app import (
-    image_routes,
-    scope_lifespan,
-    scope_middleware,
-    scope_routes,
-)
+from .scope.app import image_router, scope_router
 
 setup_logging()
 
@@ -70,16 +65,12 @@ routes = [
     Mount("/api", routes=api_routes),
     Mount("/boxviewer", routes=bboxviewer),
     Route("/recalc_vectors", recalc_vectors, methods=["POST"]),
-    Mount("/scope", routes=scope_routes),
-    Mount("/image", routes=image_routes),
 ]
 
-app = FastAPI(
-    routes=routes,
-    middleware=scope_middleware,
-    lifespan=scope_lifespan,
-)
+app = FastAPI(routes=routes)
 app.include_router(clusters_router, prefix="/clustered-scope")
+app.include_router(scope_router, prefix="/scope")
+app.include_router(image_router, prefix="/image")
 
 # Redirect React frontend application links
 viewer_dir = files("yfcc_scope") / "dist"

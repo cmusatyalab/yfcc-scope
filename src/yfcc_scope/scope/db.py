@@ -60,7 +60,7 @@ class Object(SQLTable):
 DATABASE_URL = URL.create(
     "postgresql+asyncpg",
     username=settings.DB_USER,
-    password=settings.DB_PASSWORD,
+    password=str(settings.DB_PASSWORD),
     host=settings.DB_HOST,
     port=settings.DB_PORT,
     database=settings.DB_NAME,
@@ -211,11 +211,11 @@ async def get_item_by_id(object_key: str) -> tuple[str, int, int]:
             .where(Object.key == object_key)
         )
         result = await session.execute(stmt)
-        row = result.fetchone()
+        row = result.first()
         if row is None:
             msg = f"{object_key} not found"
             raise KeyError(msg)
-        return row
+        return tuple(row)
 
 
 def generate_shard_index(url: str) -> Iterator[tuple[str, int, int]]:

@@ -5,31 +5,26 @@ from collections.abc import AsyncIterable
 from typing import Annotated
 
 from fastapi import APIRouter, FastAPI, Path, Query, Request
-from fastapi.responses import StreamingResponse
 
 from ..scope.slicer import generate_shard
+from ..types import (
+    ClusterID,
+    Embeddings,
+    EmbeddingType,
+    TarStreamingResponse,
+    WIDSDescriptor,
+)
 from .clusters import (
     cluster_wids_descriptor,
     embeddings_to_clusters,
     get_items_in_cluster,
     scoped_wids_descriptor,
 )
-from .types import (
-    ClusterID,
-    Embeddings,
-    EmbeddingType,
-    WIDSDescriptor,
-)
-
-
-class TarStreamingResponse(StreamingResponse):
-    media_type = "application/x-tar"
-
 
 router = APIRouter()
 
 
-@router.get("/{embedding_type}.json", tags=["scope"])
+@router.get("/{embedding_type}.json", tags=["webdataset index"])
 async def scope_all_clusters(
     request: Request, embedding_type: EmbeddingType
 ) -> WIDSDescriptor:
@@ -38,7 +33,7 @@ async def scope_all_clusters(
     return await cluster_wids_descriptor(embedding_type, base_url)
 
 
-@router.post("/{embedding_type}.json", tags=["scope"])
+@router.post("/{embedding_type}.json", tags=["webdataset index"])
 async def scoped_clusters(
     request: Request,
     embedding_type: EmbeddingType,

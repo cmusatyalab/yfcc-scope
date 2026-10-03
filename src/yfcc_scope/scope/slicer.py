@@ -10,18 +10,18 @@ import tarfile
 from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path
-from typing import Any
 
 import niquests
 from tenacity import RetryError, TryAgain, retry, wait_exponential
 
 from .. import settings
+from ..types import WebDatasetShard, WIDSDescriptor
 from .db import count_items_in_scope, get_item_by_id
 
 logger = logging.getLogger(__name__)
 
 
-async def generate_wids_descriptor(scope: str, base_url: str) -> dict[str, Any]:
+async def generate_wids_descriptor(scope: str, base_url: str) -> WIDSDescriptor:
     nitems = await count_items_in_scope(scope)
 
     shard_name = f"{scope}-%06d.tar"
@@ -30,25 +30,18 @@ async def generate_wids_descriptor(scope: str, base_url: str) -> dict[str, Any]:
 
     # build the WIDS descriptor
     shardlist = [
-        {"url": shard_name % index, "nsamples": settings.SCOPE_BATCH_SIZE}
+        WebDatasetShard(url=shard_name % index, nsamples=settings.SCOPE_BATCH_SIZE)
         for index in range(nshards)
     ]
     if last_nitems:
         shardlist.append(
-            {
-                "url": shard_name % nshards,
-                "nsamples": last_nitems,
-            }
+            WebDatasetShard(url=shard_name % nshards, nsamples=last_nitems)
         )
-
-    wids_descriptor = {
-        "wids_version": 1,
-        "name": scope,
-        "description": "",
-        "base": base_url,
-        "shardlist": shardlist,
-    }
-    return wids_descriptor
+    return WIDSDescriptor(
+        name=scope,
+        base=base_url,
+        shardlist=shardlist,
+    )
 
 
 @retry(wait=wait_exponential(multiplier=1, max=10))
@@ -99,7 +92,8 @@ async def get_image_by_id(image_id: str) -> bytes:
     with tarfile.open(fileobj=io.BytesIO(obj), mode="r") as tar:
         for member in tar:
             if member.isfile() and Path(member.name).suffix in (".jpg",):
-                with tar.extractfile(member) as file_obj:
+                file_obj = tar.extractfile(member)
+                if file_obj is not None:
                     return file_obj.read()
 
     msg = f"{image_id} JPEG image not found"

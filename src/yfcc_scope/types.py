@@ -6,7 +6,9 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, NewType
 
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
 
 ClusterID = NewType("ClusterID", int)
 
@@ -20,6 +22,10 @@ class Embeddings(BaseModel):
     embeddings: Annotated[
         list[list[float]], Field(description="List of embedding vectors")
     ]
+
+
+class TarStreamingResponse(StreamingResponse):
+    media_type = "application/x-tar"
 
 
 class WebDatasetShard(BaseModel):

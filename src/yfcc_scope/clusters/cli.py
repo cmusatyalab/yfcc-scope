@@ -10,13 +10,13 @@ from rich import print
 from tqdm.asyncio import tqdm
 
 from ..scope.slicer import generate_shard
+from ..types import (
+    ClusterID,
+    EmbeddingType,
+)
 from .clusters import (
     get_items_in_cluster,
     scoped_wids_descriptor,
-)
-from .types import (
-    ClusterID,
-    EmbeddingType,
 )
 
 app = typer.Typer(no_args_is_help=True)
