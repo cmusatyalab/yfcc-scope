@@ -14,8 +14,10 @@ ClusterID = NewType("ClusterID", int)
 
 
 class EmbeddingType(str, Enum):
-    clip = "clip-2"
-    dinov3 = "dinov3-2"
+    clip = "clip"
+    clip_2 = "clip-2"
+    dinov3 = "dinov3"
+    dinov3_2 = "dinov3-2"
 
 
 class Embeddings(BaseModel):

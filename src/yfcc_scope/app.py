@@ -18,7 +18,7 @@ from .bboxviewer.app import (
     routes as bboxviewer,
 )
 from .cluster_centroids_pca3d.app import (
-    api_routes as cluster_centroids_api,
+    router as cluster_centroids_router,
 )
 from .clusters.app import router as clusters_router
 from .log import setup_logging
@@ -58,7 +58,9 @@ api_routes = [
     Route("/create_scope_clip_image", create_scope_clip_image, methods=["POST"]),
     Route("/download_zip", download_zip, methods=["POST"]),
     *bboxviewer_api,
-    *cluster_centroids_api,
+    # pulling routes out of fastapi.APIRouter is a hack we need until we have
+    # all api endpoints converted to FastAPI
+    *cluster_centroids_router.routes,
 ]
 routes = [
     Route("/", home),
@@ -68,16 +70,11 @@ routes = [
 ]
 
 app = FastAPI(routes=routes)
+app.include_router(image_router, prefix="/image")
 app.include_router(clusters_router, prefix="/clustered-scope")
 app.include_router(scope_router, prefix="/scope")
-app.include_router(image_router, prefix="/image")
+app.include_router(cluster_centroids_router, prefix="/api")
 
 # Redirect React frontend application links
 viewer_dir = files("yfcc_scope") / "dist"
-app.mount("/assets", StaticFiles(directory=str(viewer_dir / "assets"), html=True))
-app.mount(
-    "/image-viewer", StaticFiles(directory=str(viewer_dir), html=True), name="viewer"
-)
-app.mount("/dashboard", StaticFiles(directory=str(viewer_dir), html=True))
-app.mount("/pca3d", StaticFiles(directory=str(viewer_dir), html=True))
-app.mount("/cluster", StaticFiles(directory=str(viewer_dir), html=True))
+app.frontend("/", directory=viewer_dir)

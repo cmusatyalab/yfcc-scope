@@ -1,150 +1,137 @@
 # SPDX-FileCopyrightText: 2025, 2026 Carnegie Mellon University
 # SPDX-License-Identifier: GPL-2.0-only
 
-from io import BytesIO
-from pathlib import Path
-
 import json
-import numpy as np
-from starlette.concurrency import run_in_threadpool
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Annotated
 
-from ..log import log
+import numpy as np
+import numpy.typing as npt
+from fastapi import APIRouter, Depends, File, Form, HTTPException
+from starlette.concurrency import run_in_threadpool
+
 from ..embedding import clip_image_features, dinov3_image_features
+from ..log import log
+from ..types import ClusterID, EmbeddingType
 
 METHOD = "faiss_kmeans"
 BASE_DIR = Path(__file__).resolve().parent
 
-pca_cluster_data = {}
+
+@dataclass
+class ClusterData:
+    embedding: str
+    centroids: npt.NDArray
+    pca3d_centroids: npt.NDArray
+    inverted_index_indptr: npt.NDArray
+    inverted_index_order: npt.NDArray
+    counts: npt.NDArray
+    image_id_list: list[int]
 
 
-def _load_pca_data(embedding_type: str):
-    if pca_cluster_data.get(embedding_type):
+pca_cluster_data: dict[EmbeddingType, ClusterData] = {}
+
+
+def _load_pca_data(embedding: EmbeddingType) -> None:
+    if pca_cluster_data.get(embedding):
         return
 
-    if not embedding_type in ["clip", "dinov3", "clip-2", "dinov3-2"]:
-        raise FileNotFoundError(f"Unknown embedding type: {embedding_type}")
+    embedding_type = embedding.value
 
     log.info(f"Loading {embedding_type} data")
     centroids = np.load(BASE_DIR / embedding_type / f"{METHOD}_centroids.npy")
-    pca3d_centroids = np.load(BASE_DIR / embedding_type / f"{METHOD}_pca3d_centroids.npy")
+    pca3d_centroids = np.load(
+        BASE_DIR / embedding_type / f"{METHOD}_pca3d_centroids.npy"
+    )
     assignments = np.load(BASE_DIR / embedding_type / f"{METHOD}_assignments.npy")
-    inverted_index_indptr = np.load(BASE_DIR / embedding_type / f"{METHOD}_inverted_index_indptr.npy")
-    inverted_index_order = np.load(BASE_DIR / embedding_type / f"{METHOD}_inverted_index_order.npy")
+    inverted_index_indptr = np.load(
+        BASE_DIR / embedding_type / f"{METHOD}_inverted_index_indptr.npy"
+    )
+    inverted_index_order = np.load(
+        BASE_DIR / embedding_type / f"{METHOD}_inverted_index_order.npy"
+    )
     with open(BASE_DIR / embedding_type / "image_id_list.json") as f:
         image_id_list = json.load(f)
 
     n_clusters = pca3d_centroids.shape[0]
     counts = np.bincount(assignments, minlength=n_clusters)
 
-    pca_cluster_data[embedding_type] = {
-        "centroids": centroids,
-        "pca3d_centroids": pca3d_centroids,
-        "assignments": assignments,
-        "inverted_index_indptr": inverted_index_indptr,
-        "inverted_index_order": inverted_index_order,
-        "counts": counts,
-        "image_id_list": image_id_list,
-    }
+    pca_cluster_data[embedding] = ClusterData(
+        embedding=embedding_type,
+        centroids=centroids,
+        pca3d_centroids=pca3d_centroids,
+        inverted_index_indptr=inverted_index_indptr,
+        inverted_index_order=inverted_index_order,
+        counts=counts,
+        image_id_list=image_id_list,
+    )
 
 
-def load_pca_data_required(func):
-    async def wrapper(request: Request):
+async def load_pca_data(embedding: EmbeddingType) -> ClusterData:
+    if embedding not in pca_cluster_data:
         try:
-            embedding_type = request.query_params["embedding"]
-        except KeyError:
-            return JSONResponse({"error": "Missing 'embedding' query parameter"}, status_code=400)
-
-        if embedding_type not in pca_cluster_data:
-            try:
-                await run_in_threadpool(_load_pca_data, embedding_type)
-            except FileNotFoundError:
-                return JSONResponse({"error": f"Data for embedding '{embedding_type}' not found"}, status_code=404)
-        return await func(request)
-
-    return wrapper
+            await run_in_threadpool(_load_pca_data, embedding)
+        except FileNotFoundError:
+            log.exception("load pca data failed")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Data for embedding '{embedding.value}' not found",
+            ) from None
+    return pca_cluster_data[embedding]
 
 
-@load_pca_data_required
-async def centroids_pca3d(request: Request):
-    embedding = request.query_params["embedding"]
-    pca3d_centroids = pca_cluster_data[embedding]["pca3d_centroids"]
-    return JSONResponse(pca3d_centroids.tolist())
+router = APIRouter()
 
 
-@load_pca_data_required
-async def cluster_sizes(request: Request):
-    embedding = request.query_params["embedding"]
-    counts = pca_cluster_data[embedding]["counts"]
-    return JSONResponse(counts.tolist())
+@router.get("/centroids_pca3d")
+async def centroids_pca3d(cluster_data: Annotated[ClusterData, Depends(load_pca_data)]):
+    pca3d_centroids = cluster_data.pca3d_centroids
+    return pca3d_centroids.tolist()
 
 
-@load_pca_data_required
-async def cluster_image_id(request: Request):
-    try:
-        cluster_index = int(request.query_params["cluster"])
-    except (ValueError, KeyError):
-        return JSONResponse({"error": "Invalid or missing 'cluster' query parameter"}, status_code=400)
+@router.get("/cluster_sizes")
+async def cluster_sizes(cluster_data: Annotated[ClusterData, Depends(load_pca_data)]):
+    counts = cluster_data.counts
+    return counts.tolist()
 
-    embedding = request.query_params["embedding"]
-    inverted_index_indptr = pca_cluster_data[embedding]["inverted_index_indptr"]
-    inverted_index_order = pca_cluster_data[embedding]["inverted_index_order"]
-    image_id_list = pca_cluster_data[embedding]["image_id_list"]
+
+@router.get("/cluster_image_id")
+async def cluster_image_id(
+    cluster_data: Annotated[ClusterData, Depends(load_pca_data)], cluster: ClusterID
+):
+    inverted_index_indptr = cluster_data.inverted_index_indptr
+    inverted_index_order = cluster_data.inverted_index_order
+    image_id_list = cluster_data.image_id_list
 
     n_clusters = len(inverted_index_indptr) - 1
-    if not (0 <= cluster_index < n_clusters):
-        return JSONResponse({"error": "cluster index out of range"}, status_code=400)
+    if not (0 <= cluster < n_clusters):
+        raise HTTPException(
+            status_code=400, detail={"error": "cluster index out of range"}
+        )
 
-    start = inverted_index_indptr[cluster_index]
-    end = inverted_index_indptr[cluster_index + 1]
+    start = inverted_index_indptr[cluster]
+    end = inverted_index_indptr[cluster + 1]
     image_ids = [image_id_list[i] for i in inverted_index_order[start:end]]
-    return JSONResponse(image_ids)
-
-@load_pca_data_required
-async def image_nearest_centroids(request: Request):
-    try:
-        form = await request.form()
-    except Exception:
-        return JSONResponse({"error": "Invalid form data"}, status_code=400)
-
-    image_file = form.get("image")
-    if not image_file:
-        return JSONResponse({"error": "image file is required"}, status_code=400)
-
-    try:
-        limit = int(form.get("limit", "5"))
-    except (ValueError, TypeError):
-        return JSONResponse({"error": "limit must be an integer"}, status_code=400)
-    limit = max(1, min(100, limit))
-
-    embedding = request.query_params["embedding"]
-    image_bytes = await image_file.read()
-
-    def find_nearest():
-        if embedding.startswith("dinov3"):
-            image_feature = dinov3_image_features(image_bytes)[0].astype(np.float32)
-        else:
-            image_feature = clip_image_features(image_bytes)[0].astype(np.float32)
-        centroids = pca_cluster_data[embedding]["centroids"].astype(np.float32)
-        centroid_norms = np.linalg.norm(centroids, axis=1, keepdims=True)
-        normalized_centroids = centroids / np.maximum(centroid_norms, 1e-12)
-        scores = normalized_centroids @ image_feature
-        return np.argsort(-scores)[:limit].astype(int).tolist()
-
-    try:
-        row_ids = await run_in_threadpool(find_nearest)
-    except Exception as error:
-        log.exception("image_nearest_centroids failed")
-        return JSONResponse({"error": str(error)}, status_code=500)
-
-    return JSONResponse({"row_ids": row_ids})
+    return image_ids
 
 
-api_routes = [
-    Route("/centroids_pca3d", centroids_pca3d),
-    Route("/cluster_sizes", cluster_sizes),
-    Route("/cluster_image_id", cluster_image_id),
-    Route("/image_nearest_centroids", image_nearest_centroids, methods=["POST"]),
-]
+@router.post("/image_nearest_centroids")
+def image_nearest_centroids(
+    cluster_data: Annotated[ClusterData, Depends(load_pca_data)],
+    image: Annotated[bytes, File()],
+    limit: Annotated[int, Form(ge=1, le=100)] = 5,
+):
+    if cluster_data.embedding.startswith("dinov3"):
+        image_feature = dinov3_image_features(image)[0].astype(np.float32)
+    else:
+        image_feature = clip_image_features(image)[0].astype(np.float32)
+
+    centroids = cluster_data.centroids.astype(np.float32)
+    centroid_norms = np.linalg.norm(centroids, axis=1, keepdims=True)
+    normalized_centroids = centroids / np.maximum(centroid_norms, 1e-12)
+
+    scores = normalized_centroids @ image_feature
+    row_ids = np.argsort(-scores)[:limit].astype(int).tolist()
+
+    return {"row_ids": row_ids}
