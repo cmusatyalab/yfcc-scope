@@ -438,7 +438,9 @@ async def vector_rows_api(request: Request):
         return JSONResponse({"error": f"vector_rows failed: {e}"}, status_code=500)
 
     out_rows = [
-        build_vector_row(image_file_id, image_url(request, image_file_id), total_bboxes, counts_json)
+        build_vector_row(
+            image_file_id, image_url(request, image_file_id), total_bboxes, counts_json
+        )
         for image_file_id, _path, total_bboxes, counts_json in rows
     ]
 

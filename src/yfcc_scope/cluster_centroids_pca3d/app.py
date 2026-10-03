@@ -9,6 +9,7 @@ from typing import Annotated
 import numpy as np
 import numpy.typing as npt
 from fastapi import APIRouter, Depends, File, Form, HTTPException
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from ..embedding import clip_image_features, dinov3_image_features
@@ -81,17 +82,21 @@ async def load_pca_data(embedding: EmbeddingType) -> ClusterData:
     return pca_cluster_data[embedding]
 
 
-router = APIRouter()
+router = APIRouter(tags=["PCA3D Clusters"])
 
 
 @router.get("/centroids_pca3d")
-async def centroids_pca3d(cluster_data: Annotated[ClusterData, Depends(load_pca_data)]):
+async def centroids_pca3d(
+    cluster_data: Annotated[ClusterData, Depends(load_pca_data)],
+) -> list[tuple[float, float, float]]:
     pca3d_centroids = cluster_data.pca3d_centroids
     return pca3d_centroids.tolist()
 
 
 @router.get("/cluster_sizes")
-async def cluster_sizes(cluster_data: Annotated[ClusterData, Depends(load_pca_data)]):
+async def cluster_sizes(
+    cluster_data: Annotated[ClusterData, Depends(load_pca_data)],
+) -> list[int]:
     counts = cluster_data.counts
     return counts.tolist()
 
@@ -99,7 +104,7 @@ async def cluster_sizes(cluster_data: Annotated[ClusterData, Depends(load_pca_da
 @router.get("/cluster_image_id")
 async def cluster_image_id(
     cluster_data: Annotated[ClusterData, Depends(load_pca_data)], cluster: ClusterID
-):
+) -> list[int]:
     inverted_index_indptr = cluster_data.inverted_index_indptr
     inverted_index_order = cluster_data.inverted_index_order
     image_id_list = cluster_data.image_id_list
@@ -116,12 +121,16 @@ async def cluster_image_id(
     return image_ids
 
 
+class NearestCentroids(BaseModel):
+    row_ids: list[ClusterID]
+
+
 @router.post("/image_nearest_centroids")
 def image_nearest_centroids(
     cluster_data: Annotated[ClusterData, Depends(load_pca_data)],
     image: Annotated[bytes, File()],
     limit: Annotated[int, Form(ge=1, le=100)] = 5,
-):
+) -> NearestCentroids:
     if cluster_data.embedding.startswith("dinov3"):
         image_feature = dinov3_image_features(image)[0].astype(np.float32)
     else:
@@ -134,4 +143,4 @@ def image_nearest_centroids(
     scores = normalized_centroids @ image_feature
     row_ids = np.argsort(-scores)[:limit].astype(int).tolist()
 
-    return {"row_ids": row_ids}
+    return NearestCentroids(row_ids=row_ids)

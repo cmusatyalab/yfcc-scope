@@ -4,7 +4,7 @@
 from collections.abc import AsyncIterable
 from typing import Annotated
 
-from fastapi import APIRouter, FastAPI, Path, Query, Request
+from fastapi import APIRouter, Path, Query, Request
 
 from ..scope.slicer import generate_shard
 from ..types import (
@@ -59,7 +59,3 @@ async def get_cluster_shard(
     items = get_items_in_cluster(embedding_type, cluster)
     async for chunk in generate_shard(items):
         yield chunk
-
-
-app = FastAPI()
-app.include_router(router)
