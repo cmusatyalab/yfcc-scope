@@ -22,7 +22,6 @@ from .db import (
     execute_query,
     execute_wrapped_query,
     fetch_paths_by_ids,
-    rebuild_vector_table,
     search_clip_ids,
     search_clip_images,
 )
@@ -363,11 +362,3 @@ async def download_zip(request: Request):
     return StreamingResponse(
         stream_zip(zip_files()), headers=headers, media_type="application/zip"
     )
-
-
-async def recalc_vectors(request: Request):
-    try:
-        await run_in_threadpool(rebuild_vector_table)
-    except Exception as e:
-        return PlainTextResponse(f"recalc vectors failed: {e}", status_code=500)
-    return PlainTextResponse("ok (vectors rebuilt)")

@@ -23,7 +23,6 @@ from .routes import (
     create_scope_clip_text,
     create_scope_coco,
     download_zip,
-    recalc_vectors,
     run_query,
     run_query_count,
 )
@@ -50,7 +49,6 @@ api_routes = [
 ]
 routes = [
     Mount("/api", routes=api_routes),
-    Route("/recalc_vectors", recalc_vectors, methods=["POST"]),
 ]
 
 app = FastAPI(routes=routes)
