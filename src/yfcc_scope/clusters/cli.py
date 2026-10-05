@@ -19,7 +19,9 @@ from .clusters import (
     scoped_wids_descriptor,
 )
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(
+    help="Test cluster-specific wids and shard generators", no_args_is_help=True
+)
 
 
 async def create_wids(

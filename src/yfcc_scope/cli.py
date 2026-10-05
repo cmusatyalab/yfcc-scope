@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import typer
 
+from .clusters import cli as clusters_cli
 from .scope import cli as scope_cli
 
 app = typer.Typer(no_args_is_help=True)
@@ -21,6 +22,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
 app.add_typer(scope_cli.scope_app, name="scope")
 app.add_typer(scope_cli.db_app, name="scope-db")
 app.add_typer(scope_cli.test_app, name="scope-test")
+app.add_typer(clusters_cli.app, name="cluster-scope")
 
 if __name__ == "__main__":
     app()
