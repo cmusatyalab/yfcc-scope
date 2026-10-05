@@ -82,7 +82,7 @@ async def load_pca_data(embedding: EmbeddingType) -> ClusterData:
     return pca_cluster_data[embedding]
 
 
-router = APIRouter(tags=["PCA3D Clusters"])
+router = APIRouter(tags=["cluster explorer"])
 
 
 @router.get("/centroids_pca3d")
