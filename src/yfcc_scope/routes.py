@@ -19,10 +19,8 @@ from starlette.responses import (
 from stream_zip import ZIP_32, stream_zip
 
 from .db import (
-    conf_hist_sync,
     execute_query,
     execute_wrapped_query,
-    fetch_images_for_labels,
     fetch_paths_by_ids,
     rebuild_vector_table,
     search_clip_ids,
@@ -32,10 +30,9 @@ from .db import (
 from .embedding import clip_image_features, clip_text_features
 from .log import log
 from .scope.app import image_url
-from .settings import MAX_LIMIT, SCOPE_BASE
+from .settings import SCOPE_BASE
 from .utils import (
     build_vector_row,
-    parse_conf_ranges_0_100,
     sanitize_scope_name,
     validate_sql,
 )
@@ -382,39 +379,6 @@ async def download_zip(request: Request):
     return StreamingResponse(
         stream_zip(zip_files()), headers=headers, media_type="application/zip"
     )
-
-
-async def images_api(request: Request):
-    qp = request.query_params
-    labels = [label.strip() for label in qp.getlist("label") if label.strip()]
-    try:
-        limit, offset = _parse_limit_offset(qp, default_limit=50, max_limit=MAX_LIMIT)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
-
-    conf_ranges = parse_conf_ranges_0_100((qp.get("conf") or "").strip())
-
-    try:
-        images = await run_in_threadpool(
-            fetch_images_for_labels, request, labels, limit, offset, conf_ranges
-        )
-    except Exception as e:
-        return JSONResponse({"error": f"images query failed: {e}"}, status_code=500)
-
-    return JSONResponse(
-        {"labels": labels, "limit": limit, "offset": offset, "images": images}
-    )
-
-
-async def conf_hist(request: Request):
-    labels = request.query_params.getlist("label")
-    if not labels:
-        return JSONResponse({"error": "need ?label=cat&label=dog"}, status_code=400)
-    try:
-        bins = await run_in_threadpool(conf_hist_sync, labels)
-    except Exception as e:
-        return JSONResponse({"error": f"conf_hist failed: {e}"}, status_code=500)
-    return JSONResponse({"labels": labels, "bins": bins})
 
 
 async def vector_rows_api(request: Request):

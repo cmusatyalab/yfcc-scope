@@ -13,16 +13,15 @@ from starlette.routing import Mount, Route
 from .bboxviewer.app import router as bboxviewer_router
 from .cluster_centroids_pca3d.app import router as cluster_centroids_router
 from .clusters.app import router as clusters_router
+from .dashboard.app import router as dashboard_router
 from .log import setup_logging
 from .routes import (
     clip_image_query,
     clip_text_query,
-    conf_hist,
     create_scope_clip_image,
     create_scope_clip_text,
     create_scope_coco,
     download_zip,
-    images_api,
     recalc_vectors,
     run_query,
     run_query_count,
@@ -34,8 +33,6 @@ setup_logging()
 
 
 api_routes = [
-    Route("/images", images_api),
-    Route("/conf_hist", conf_hist, methods=["GET"]),
     Route("/vector_rows", vector_rows_api),
     Route("/clip_text_query", clip_text_query, methods=["POST"]),
     Route("/clip_image_query", clip_image_query, methods=["POST"]),
@@ -49,6 +46,7 @@ api_routes = [
     # all api endpoints converted to FastAPI
     *bboxviewer_router.routes,
     *cluster_centroids_router.routes,
+    *dashboard_router.routes,
 ]
 routes = [
     Mount("/api", routes=api_routes),
@@ -60,6 +58,7 @@ app.include_router(image_router, prefix="/image")
 app.include_router(clusters_router, prefix="/clustered-scope")
 app.include_router(scope_router, prefix="/scope")
 app.include_router(cluster_centroids_router, prefix="/api")
+app.include_router(dashboard_router, prefix="/api")
 app.include_router(bboxviewer_router, prefix="/boxviewer")
 
 
