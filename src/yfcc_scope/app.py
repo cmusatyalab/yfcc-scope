@@ -15,6 +15,7 @@ from .cluster_centroids_pca3d.app import router as cluster_centroids_router
 from .clusters.app import router as clusters_router
 from .dashboard.app import router as dashboard_router
 from .log import setup_logging
+from .pcaviewer.app import router as pcaviewer_router
 from .routes import (
     clip_image_query,
     clip_text_query,
@@ -25,7 +26,6 @@ from .routes import (
     recalc_vectors,
     run_query,
     run_query_count,
-    vector_rows_api,
 )
 from .scope.app import image_router, scope_router
 
@@ -33,7 +33,6 @@ setup_logging()
 
 
 api_routes = [
-    Route("/vector_rows", vector_rows_api),
     Route("/clip_text_query", clip_text_query, methods=["POST"]),
     Route("/clip_image_query", clip_image_query, methods=["POST"]),
     Route("/run_query", run_query, methods=["POST"]),
@@ -47,6 +46,7 @@ api_routes = [
     *bboxviewer_router.routes,
     *cluster_centroids_router.routes,
     *dashboard_router.routes,
+    *pcaviewer_router.routes,
 ]
 routes = [
     Mount("/api", routes=api_routes),
@@ -57,9 +57,10 @@ app = FastAPI(routes=routes)
 app.include_router(image_router, prefix="/image")
 app.include_router(clusters_router, prefix="/clustered-scope")
 app.include_router(scope_router, prefix="/scope")
+app.include_router(bboxviewer_router, prefix="/boxviewer")
 app.include_router(cluster_centroids_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
-app.include_router(bboxviewer_router, prefix="/boxviewer")
+app.include_router(pcaviewer_router, prefix="/api")
 
 
 @app.get("/", response_class=RedirectResponse)

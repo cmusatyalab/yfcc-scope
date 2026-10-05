@@ -25,7 +25,6 @@ from .db import (
     rebuild_vector_table,
     search_clip_ids,
     search_clip_images,
-    vector_rows_sync,
 )
 from .embedding import clip_image_features, clip_text_features
 from .log import log
@@ -36,21 +35,6 @@ from .utils import (
     sanitize_scope_name,
     validate_sql,
 )
-
-
-def _parse_limit_offset(qp, default_limit, max_limit):
-    try:
-        limit = int(qp.get("limit", f"{default_limit}"))
-    except ValueError as exc:
-        raise ValueError("limit must be an int") from exc
-    try:
-        offset = int(qp.get("offset", "0"))
-    except ValueError as exc:
-        raise ValueError("offset must be an int") from exc
-
-    limit = max(1, min(max_limit, limit))
-    offset = max(0, offset)
-    return limit, offset
 
 
 def _compute_clip_query(is_text, source, limit, search_fn):
@@ -378,38 +362,6 @@ async def download_zip(request: Request):
 
     return StreamingResponse(
         stream_zip(zip_files()), headers=headers, media_type="application/zip"
-    )
-
-
-async def vector_rows_api(request: Request):
-    qp = request.query_params
-    try:
-        limit, offset = _parse_limit_offset(qp, default_limit=5000, max_limit=20000)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
-
-    try:
-        min_total = int(qp.get("min_total_bboxes", "1"))
-    except ValueError:
-        min_total = 1
-    min_total = max(0, min(10_000, min_total))
-
-    try:
-        rows, updated_at = await run_in_threadpool(
-            vector_rows_sync, limit, offset, min_total
-        )
-    except Exception as e:
-        return JSONResponse({"error": f"vector_rows failed: {e}"}, status_code=500)
-
-    out_rows = [
-        build_vector_row(
-            image_file_id, image_url(request, image_file_id), total_bboxes, counts_json
-        )
-        for image_file_id, _path, total_bboxes, counts_json in rows
-    ]
-
-    return JSONResponse(
-        {"updated_at": updated_at, "limit": limit, "offset": offset, "rows": out_rows}
     )
 
 
