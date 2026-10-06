@@ -43,6 +43,9 @@ jupyter = [
 [project.scripts]
 yfcc-viewer = "yfcc_scope.cli:app"
 
+[tool.fastapi]
+entrypoint = "yfcc_scope.app:app"
+
 [tool.ruff]
 target-version = "py310"
 include = [
