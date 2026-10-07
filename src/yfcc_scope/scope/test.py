@@ -9,8 +9,9 @@ import typer
 from rich import print
 from tqdm.asyncio import tqdm
 
+from ..utils import generate_webdataset_shard
 from .db import get_items_in_scope
-from .slicer import generate_shard, generate_wids_descriptor
+from .slicer import generate_wids_descriptor
 
 app = typer.Typer(help="Test wids and shard generators.", no_args_is_help=True)
 
@@ -35,7 +36,7 @@ async def create_shard(scope: str, shard: int) -> None:
     items = tqdm(items)
 
     with open(f"{scope}-{shard:06d}.tar", "wb") as f:
-        async for obj in generate_shard(items):
+        async for obj in generate_webdataset_shard(items):
             f.write(obj)
 
 

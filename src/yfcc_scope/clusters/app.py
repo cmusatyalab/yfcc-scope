@@ -6,7 +6,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Request
 
-from ..scope.slicer import generate_shard
 from ..types import (
     ClusterID,
     Embeddings,
@@ -14,6 +13,7 @@ from ..types import (
     TarStreamingResponse,
     WIDSDescriptor,
 )
+from ..utils import generate_webdataset_shard
 from .clusters import (
     cluster_wids_descriptor,
     embeddings_to_clusters,
@@ -57,5 +57,5 @@ async def get_cluster_shard(
     cluster: Annotated[ClusterID, Path(title="Cluster ID", ge=0)],
 ) -> AsyncIterable[bytes]:
     items = get_items_in_cluster(embedding_type, cluster)
-    async for chunk in generate_shard(items):
+    async for chunk in generate_webdataset_shard(items):
         yield chunk

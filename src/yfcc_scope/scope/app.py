@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import contextlib
 import secrets
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from importlib.resources import files
 from typing import Annotated
 
@@ -22,11 +22,11 @@ from starlette.datastructures import Secret
 
 from .. import settings
 from ..types import ClusterID, TarStreamingResponse, WIDSDescriptor
+from ..utils import generate_webdataset_shard
 from .db import delete_scope as db_delete_scope
 from .db import export_scope, get_items_in_scope, import_scope
-from .slicer import generate_shard, generate_wids_descriptor, get_image_by_id
+from .slicer import generate_wids_descriptor, get_image_by_id
 from .util import chunks_to_lines
-
 
 apikey_scheme = APIKeyHeader(name="X-API-Key")
 
@@ -39,7 +39,7 @@ async def require_apikey(api_key: Annotated[Secret, Depends(apikey_scheme)]) -> 
 
 
 @contextlib.asynccontextmanager
-async def scope_lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def scope_lifespan(app: FastAPI) -> AsyncGenerator[None]:
     if str(settings.SCOPE_API_KEY) == str(settings.SESSION_KEY):
         print(f"[red]NOTE:[/red]\t  Temporary API key is: {settings.SCOPE_API_KEY}")
     yield
@@ -82,7 +82,7 @@ async def get_webdataset_shard(
 ) -> AsyncIterator[bytes]:
     """Return a WebDataset shard for a defined scope."""
     items = get_items_in_scope(scope, shard)
-    async for chunk in generate_shard(items):
+    async for chunk in generate_webdataset_shard(items):
         yield chunk
 
 

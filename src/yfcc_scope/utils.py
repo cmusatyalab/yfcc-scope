@@ -3,11 +3,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import colorsys
 import hashlib
+import logging
 import re
+from collections.abc import AsyncIterator
+from contextlib import suppress
 
+import niquests
+from tenacity import RetryError, TryAgain, retry, wait_exponential
+
+from . import settings
 from .constants import BLOCKED_KEYWORDS, LABELS
+
+logger = logging.getLogger(__name__)
 
 
 def color_for_label(label: str):
@@ -116,3 +126,43 @@ def build_vector_row(image_file_id, path, total_bboxes, counts_json):
     for lab in LABELS:
         item[lab] = int(counts.get(lab, 0) or 0)
     return item
+
+
+@retry(wait=wait_exponential(multiplier=1, max=10))
+async def get_object(
+    session: niquests.AsyncSession, url: str, offset: int, end: int
+) -> bytes:
+    # shard = url.rsplit("/", 1)[1]
+    # url = f"http://blue1.satyalab/yfcc100m/{shard}"
+    headers = {"Range": f"bytes={offset}-{end}"}
+    response = await session.get(url, headers=headers)
+    response.raise_for_status()
+    if response.content is None:
+        logger.error(f"Received empty content from {url} ({offset}-{end})")
+        raise TryAgain
+    return response.content
+
+
+async def generate_webdataset_shard(
+    items: AsyncIterator[tuple[str, int, int]],
+) -> AsyncIterator[bytes]:
+    session = niquests.AsyncSession()
+
+    # sliding window for url range-request fetches
+    tasks = []
+    for _ in range(settings.SCOPE_FETCH_WINDOW):
+        try:
+            url, start, end = await anext(items)
+            tasks.append(asyncio.create_task(get_object(session, url, start, end)))
+        except StopAsyncIteration:
+            break
+
+    while tasks:
+        try:
+            yield await tasks.pop(0)
+        except RetryError:
+            logger.error("Timed out trying to fetch object")
+
+        with suppress(StopAsyncIteration):
+            url, start, end = await anext(items)
+            tasks.append(asyncio.create_task(get_object(session, url, start, end)))

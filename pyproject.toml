@@ -7,7 +7,7 @@ requires-python = ">=3.10,<3.12"
 dependencies = [
     "asyncpg>=0.31.0",
     "braceexpand>=0.1.7",
-    "fastapi>=0.142.2",
+    "fastapi[standard-no-fastapi-cloud-cli]>=0.142.2",
     "niquests>=3.20.1",
     "numpy>=2.2.6",
     "open-clip-torch>=3.3.0",

@@ -9,11 +9,11 @@ import typer
 from rich import print
 from tqdm.asyncio import tqdm
 
-from ..scope.slicer import generate_shard
 from ..types import (
     ClusterID,
     EmbeddingType,
 )
+from ..utils import generate_webdataset_shard
 from .clusters import (
     get_items_in_cluster,
     scoped_wids_descriptor,
@@ -49,7 +49,7 @@ async def create_shard(embedding: EmbeddingType, cluster: int) -> None:
     items = tqdm(items)
 
     with open(f"{embedding}-{cluster:06d}.tar", "wb") as f:
-        async for obj in generate_shard(items):
+        async for obj in generate_webdataset_shard(items):
             f.write(obj)
 
 
