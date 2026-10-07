@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from ..embedding import clip_image_features, dinov3_image_features
+from ..embedding import image_model
 from ..log import log
 from ..types import ClusterID, EmbeddingType
 
@@ -22,7 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 @dataclass
 class ClusterData:
-    embedding: str
+    embedding: EmbeddingType
     centroids: npt.NDArray
     pca3d_centroids: npt.NDArray
     inverted_index_indptr: npt.NDArray
@@ -59,7 +59,7 @@ def _load_pca_data(embedding: EmbeddingType) -> None:
     counts = np.bincount(assignments, minlength=n_clusters)
 
     pca_cluster_data[embedding] = ClusterData(
-        embedding=embedding_type,
+        embedding=embedding,
         centroids=centroids,
         pca3d_centroids=pca3d_centroids,
         inverted_index_indptr=inverted_index_indptr,
@@ -131,10 +131,9 @@ def image_nearest_centroids(
     image: Annotated[bytes, File()],
     limit: Annotated[int, Form(ge=1, le=100)] = 5,
 ) -> NearestCentroids:
-    if cluster_data.embedding.startswith("dinov3"):
-        image_feature = dinov3_image_features(image)[0].astype(np.float32)
-    else:
-        image_feature = clip_image_features(image)[0].astype(np.float32)
+    image_feature = (
+        image_model(cluster_data.embedding).image_features(image)[0].astype(np.float32)
+    )
 
     centroids = cluster_data.centroids.astype(np.float32)
     centroid_norms = np.linalg.norm(centroids, axis=1, keepdims=True)

@@ -24,7 +24,7 @@ from ..db import (
     search_clip_ids,
     search_clip_images,
 )
-from ..embedding import clip_image_features, clip_text_features
+from ..embedding import ClipModel
 from ..log import log
 from ..scope.slicer import get_image_by_id
 from ..settings import SCOPE_BASE
@@ -39,9 +39,9 @@ router = APIRouter(tags=["image viewer"])
 
 def _compute_clip_query(is_text, source, limit, search_fn):
     if is_text:
-        feat = clip_text_features([source])[0]
+        feat = ClipModel().text_features([source])[0]
     else:
-        feat = clip_image_features(source)[0]
+        feat = ClipModel().image_features(source)[0]
 
     embedding_list = feat.astype(np.float32).tolist()
     rows = search_fn(feat, limit)
