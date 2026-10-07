@@ -3,7 +3,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Query, Request
 
 from ..db import conf_hist_sync, fetch_images_for_labels
 from ..settings import MAX_LIMIT

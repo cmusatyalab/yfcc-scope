@@ -9,7 +9,6 @@ from typing import Annotated, NewType
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-
 ClusterID = NewType("ClusterID", int)
 
 

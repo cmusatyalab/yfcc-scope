@@ -33,7 +33,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter(tags=["bboxviewer"])
 router.mount(
     "/static",
-    StaticFiles(packages=[("yfcc_scope", "static")]), 
+    StaticFiles(packages=[("yfcc_scope", "static")]),
     name="static",
 )
 
