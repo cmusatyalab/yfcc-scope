@@ -187,22 +187,6 @@ async def get_items_in_scope(
             yield url, offset, end
 
 
-async def get_items_by_id(
-    object_keys: AsyncIterable[str],
-) -> AsyncIterator[tuple[str, int, int]]:
-    async with AsyncSession(engine) as session:
-        async for batch in batched(object_keys, 1000):
-            stmt = (
-                select(Shard.url, Object.offset, Object.end)
-                .join(Shard)
-                .where(Object.key.in_(batch))
-                .order_by(Object.shard_id, Object.offset)
-            )
-            result = await session.execute(stmt)
-            for url, offset, end in result:
-                yield url, offset, end
-
-
 async def get_item_by_id(object_key: str) -> tuple[str, int, int]:
     async with AsyncSession(engine) as session:
         stmt = (

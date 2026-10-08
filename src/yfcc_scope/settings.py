@@ -31,6 +31,9 @@ try:
 
     SCOPE_BATCH_SIZE: int = config("SCOPE_BATCH_SIZE", cast=int, default=10_000)
     SCOPE_FETCH_WINDOW: int = config("SCOPE_FETCH_WINDOW", cast=int, default=64)
+
+    EMBEDDING_BASE_DIR: str = config("EMBEDDING_BASE_DIR")
+    BACKEND_SHARD_URL: str = config("BACKEND_SHARD_URL")
 except KeyError as err:
     print(f"Missing .env configuration file ({err})")
     raise typer.Exit() from err

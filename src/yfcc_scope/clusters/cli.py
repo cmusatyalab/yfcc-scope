@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
+import polars as pl
 import typer
 from rich import print
 from tqdm.asyncio import tqdm
 
+from ..settings import EMBEDDING_BASE_DIR
 from ..types import (
     ClusterID,
     EmbeddingType,
@@ -61,6 +64,24 @@ def shard(embedding: EmbeddingType, cluster: int) -> None:
     URL_BASE/<embedding>-{cluster:06d}.tar
     """
     asyncio.run(create_shard(embedding, cluster))
+
+
+@app.command()
+def build_cluster_index(embedding: EmbeddingType, shard_index: Path) -> None:
+    """Build a cluster index ('clusters.parquet') for all objects in assignments."""
+    assignments = Path(EMBEDDING_BASE_DIR, embedding.value, "assignments.parquet")
+    clusters = Path(EMBEDDING_BASE_DIR, embedding.value, "clusters.parquet")
+
+    shard_index_df = pl.scan_ndjson(shard_index)
+    cluster_index = (
+        pl.scan_parquet(assignments)
+        .select(pl.col("image_id").cast(pl.String), pl.col("cluster"))
+        .join(shard_index_df, on="image_id")
+        .sort("cluster", "shard", "offset")
+        .select("cluster", "image_id", "shard", "offset", "length")
+    )
+    # print(cluster_index.explain())
+    cluster_index.sink_parquet(clusters)
 
 
 if __name__ == "__main__":

@@ -11,8 +11,7 @@ import numpy as np
 import polars as pl
 from fastapi import HTTPException
 
-from ..cluster_centroids_pca3d.app import BASE_DIR
-from ..scope.db import get_items_by_id
+from ..settings import BACKEND_SHARD_URL, EMBEDDING_BASE_DIR
 from ..types import (
     ClusterID,
     Embeddings,
@@ -25,17 +24,17 @@ from ..types import (
 # should probably use a config setting to locate the directory containing
 # clustered embeddings instead of using cluster_centroids_pca3d.app.BASE_DIR
 def read_centroids(embedding_type: EmbeddingType) -> pl.DataFrame:
-    centroids_file = Path(BASE_DIR, embedding_type.value, "centroids.parquet")
+    centroids_file = Path(EMBEDDING_BASE_DIR, embedding_type.value, "centroids.parquet")
     if not centroids_file.exists():
         raise HTTPException(status_code=404, detail="Unknown embedding")
     return pl.read_parquet(centroids_file)
 
 
-def scan_assignments(embedding_type: EmbeddingType) -> pl.LazyFrame:
-    assignments_file = Path(BASE_DIR, embedding_type.value, "assignments.parquet")
-    if not assignments_file.exists():
-        raise HTTPException(status_code=404, detail="Unknown embedding")
-    return pl.scan_parquet(assignments_file)
+def scan_clusters(embedding_type: EmbeddingType) -> pl.LazyFrame:
+    clusters_file = Path(EMBEDDING_BASE_DIR, embedding_type.value, "clusters.parquet")
+    if not clusters_file.exists():
+        raise HTTPException(status_code=404, detail="Missing cluster index")
+    return pl.scan_parquet(clusters_file)
 
 
 def embeddings_to_clusters(
@@ -57,8 +56,8 @@ def embeddings_to_clusters(
     normalized_features = image_features / np.maximum(feature_norms, 1e-12)
 
     # score the image embeddings
-    scores = centroids @ normalized_features.T
-    return cast(list[ClusterID], np.argsort(-scores.max(axis=1)).astype(int).tolist())
+    scores = (centroids @ normalized_features.T).max(axis=1)
+    return cast(list[ClusterID], np.argsort(-scores).astype(int).tolist())
 
 
 async def cluster_wids_descriptor(
@@ -112,18 +111,23 @@ async def scoped_wids_descriptor(
 async def get_items_in_cluster(
     embedding_type: EmbeddingType, cluster: ClusterID
 ) -> AsyncIterator[tuple[str, int, int]]:
-    """Build a cluster specific webdataset shard."""
-    # Extract the image ids from the cluster assignments
-    image_ids = await (
-        scan_assignments(embedding_type)
-        .filter(pl.col("cluster") == cluster)
-        .select(pl.col("image_id"))
+    """Return object indices to build a cluster specific webdataset shard."""
+
+    cluster_offsets = await (
+        read_centroids(embedding_type)
+        .lazy()
+        .select(
+            pl.col("nsamples").shift(1).fill_null(0).cum_sum().alias("offset"),
+            pl.col("nsamples").alias("length"),
+        )
+        .slice(cluster, 1)
     ).collect_async()
+    cluster_offset, cluster_length = cluster_offsets.row(0)
 
-    async def item_ids(image_ids: pl.DataFrame) -> AsyncIterator[str]:
-        for row in image_ids.iter_rows():
-            yield str(row[0])
-
-    # Map item ids to shard urls and locations.
-    async for result in get_items_by_id(item_ids(image_ids)):
-        yield result
+    items = await (
+        scan_clusters(embedding_type)
+        .select(pl.col("shard"), pl.col("offset"), pl.col("length"))
+        .slice(cluster_offset, cluster_length)
+    ).collect_async()
+    for shard, offset, length in items.iter_rows():
+        yield BACKEND_SHARD_URL.format(shard), offset, offset + length - 1
