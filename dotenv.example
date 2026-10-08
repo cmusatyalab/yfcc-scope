@@ -21,6 +21,3 @@ SCOPE_API_KEY=
 
 # Base directory for embedding/clustering related files
 EMBEDDING_BASE_DIR=
-
-# template for generation backend shard urls from shard indexes
-BACKEND_SHARD_URL="https://storage.cmusatyalab.org/yfcc100m/yfcc100m-{:06d}.tar"

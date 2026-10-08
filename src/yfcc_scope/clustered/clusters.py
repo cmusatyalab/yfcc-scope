@@ -11,7 +11,7 @@ import numpy as np
 import polars as pl
 from fastapi import HTTPException
 
-from ..settings import BACKEND_SHARD_URL, EMBEDDING_BASE_DIR
+from ..settings import EMBEDDING_BASE_DIR
 from ..types import (
     ClusterID,
     Embeddings,
@@ -130,8 +130,8 @@ async def get_items_in_cluster(
 
     items = await (
         scan_clusters(embedding_type)
-        .select(pl.col("shard"), pl.col("offset"), pl.col("length"))
+        .select(pl.col("url"), pl.col("offset"), pl.col("length"))
         .slice(cluster_offset, cluster_length)
     ).collect_async()
-    for shard, offset, length in items.iter_rows():
-        yield BACKEND_SHARD_URL.format(shard), offset, offset + length - 1
+    for url, offset, length in items.iter_rows():
+        yield url, offset, offset + length - 1
