@@ -4,7 +4,7 @@
 from collections.abc import AsyncIterable
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 
 from ..types import (
     ClusterID,
@@ -24,25 +24,32 @@ from .clusters import (
 router = APIRouter()
 
 
-@router.get("/{embedding_type}.json", tags=["webdataset index"])
+def get_cluster_base_url(request: Request, embedding_type: EmbeddingType) -> str:
+    """Base URL for the clustered webdataset shards served by this router."""
+    url = request.url_for("cluster_wids", embedding_type=embedding_type)
+    return str(url).rsplit("/", 1)[0] + "/"
+
+
+ClusterBaseUrl = Annotated[str, Depends(get_cluster_base_url)]
+
+
+@router.get("/{embedding_type}.json", tags=["webdataset index"], name="cluster_wids")
 async def scope_all_clusters(
-    request: Request, embedding_type: EmbeddingType
+    base_url: ClusterBaseUrl, embedding_type: EmbeddingType
 ) -> WIDSDescriptor:
     """Return a WIDS descriptor for all clustered webdataset shards."""
-    base_url = str(request.base_url)
     return await cluster_wids_descriptor(embedding_type, base_url)
 
 
 @router.post("/{embedding_type}.json", tags=["webdataset index"])
 async def scoped_clusters(
-    request: Request,
+    base_url: ClusterBaseUrl,
     embedding_type: EmbeddingType,
     embeddings: Embeddings,
     limit: Annotated[int, Query(ge=0)] = 0,
 ) -> WIDSDescriptor:
     """Return a WIDS descriptor where the clustered webdataset shards are
     ordered based on the similarity score for the provided embeddings."""
-    base_url = str(request.base_url)
     clusters = embeddings_to_clusters(embedding_type, embeddings)
     return await scoped_wids_descriptor(embedding_type, base_url, clusters, limit)
 

@@ -65,13 +65,17 @@ async def cluster_wids_descriptor(
 ) -> WIDSDescriptor:
     """When we decide on our clustering methods, this can become a static file."""
     # load the cluster centroids
-    clusters = read_centroids(embedding_type).with_row_index()
+    clusters = (
+        read_centroids(embedding_type)
+        .select(pl.col("nsamples"))
+        .with_row_index()
+    )
 
     # build the WIDS descriptor
     shard_name = f"{embedding_type.value}-%06d.tar"
     shardlist = [
         WebDatasetShard(url=shard_name % cluster, nsamples=length)
-        for cluster, _, length in clusters.iter_rows()
+        for cluster, length in clusters.iter_rows()
     ]
 
     return WIDSDescriptor(

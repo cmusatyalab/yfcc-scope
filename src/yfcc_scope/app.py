@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 
 from .bboxviewer.app import router as bboxviewer_router
 from .cluster_centroids_pca3d.app import router as cluster_centroids_router
-from .clusters.app import router as clusters_router
+from .clustered.app import router as clustered_router
 from .dashboard.app import router as dashboard_router
 from .imageviewer.app import router as imageviewer_router
 from .log import setup_logging
@@ -23,9 +23,9 @@ setup_logging()
 
 app = FastAPI()
 app.include_router(image_router, prefix="/image")
-app.include_router(clusters_router, prefix="/clustered-scope")
-app.include_router(scope_router, prefix="/scope")
 app.include_router(bboxviewer_router, prefix="/boxviewer")
+app.include_router(clustered_router, prefix="/clustered")
+app.include_router(scope_router, prefix="/scope")
 app.include_router(cluster_centroids_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(imageviewer_router, prefix="/api")

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import typer
 
-from .clusters import cli as clusters_cli
+from .clustered import cli as clustered_cli
 from .pcaviewer import cli as pcaviewer_cli
 from .scope import cli as scope_cli
 
@@ -23,7 +23,7 @@ def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
 app.add_typer(scope_cli.scope_app, name="scope")
 app.add_typer(scope_cli.db_app, name="scope-db")
 app.add_typer(scope_cli.test_app, name="scope-test")
-app.add_typer(clusters_cli.app, name="cluster-scope")
+app.add_typer(clustered_cli.app, name="clustered")
 app.add_typer(pcaviewer_cli.app, name="pca-viewer")
 
 if __name__ == "__main__":
