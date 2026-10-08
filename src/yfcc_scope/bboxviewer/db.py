@@ -18,6 +18,7 @@ from sqlalchemy import (
     cast,
     func,
     insert,
+    literal,
     select,
     text,
 )
@@ -183,7 +184,7 @@ async def rebuild_histograms() -> None:
                 BoundingBoxes.label,
                 bin_func(BoundingBoxes.confidence_score).label("conf_bin"),
                 func.count(),
-                now,
+                literal(now),
             )
             .where(BoundingBoxes.confidence_score.isnot(None))
             .group_by(BoundingBoxes.label, "conf_bin")
@@ -209,7 +210,9 @@ async def rebuild_histograms() -> None:
             .group_by(BoundingBoxes.image_file_id)
             .subquery()
         )
-        stmt = select(subq.c.max_bin, func.count(), now).group_by(subq.c.max_bin)
+        stmt = select(subq.c.max_bin, func.count(), literal(now)).group_by(
+            subq.c.max_bin
+        )
         await session.execute(
             insert(ImagesMaxbin_Histograms).from_select(
                 [
