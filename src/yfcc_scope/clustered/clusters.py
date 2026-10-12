@@ -21,13 +21,11 @@ from ..types import (
 )
 
 
-# should probably use a config setting to locate the directory containing
-# clustered embeddings instead of using cluster_centroids_pca3d.app.BASE_DIR
-def read_centroids(embedding_type: EmbeddingType) -> pl.DataFrame:
-    centroids_file = Path(EMBEDDING_BASE_DIR, embedding_type.value, "centroids.parquet")
-    if not centroids_file.exists():
+def scan(embedding_type: EmbeddingType, datafile: str) -> pl.LazyFrame:
+    data_path = Path(EMBEDDING_BASE_DIR, embedding_type.value, datafile).with_suffix(".parquet")
+    if not data_path.exists():
         raise HTTPException(status_code=404, detail="Unknown embedding")
-    return pl.read_parquet(centroids_file)
+    return pl.scan_parquet(data_path)
 
 
 def scan_clusters(embedding_type: EmbeddingType) -> pl.LazyFrame:
@@ -41,7 +39,11 @@ def embeddings_to_clusters(
     embedding_type: EmbeddingType, image_embeddings: Embeddings
 ) -> list[ClusterID]:
     # load the cluster centroids
-    centroids = read_centroids(embedding_type).get_column("centroid").to_numpy()
+    centroids = (
+        scan(embedding_type, "centroids")
+        .select(pl.col("centroid"))
+        .collect()
+    ).get_column("centroid").to_numpy()
     dims = centroids.shape[1]
 
     # convert image_embeddings to numpy array and verify they are correctly sized
@@ -65,11 +67,11 @@ async def cluster_wids_descriptor(
 ) -> WIDSDescriptor:
     """When we decide on our clustering methods, this can become a static file."""
     # load the cluster centroids
-    clusters = (
-        read_centroids(embedding_type)
+    clusters = await (
+        scan(embedding_type, "centroids")
         .select(pl.col("nsamples"))
         .with_row_index()
-    )
+    ).collect_async()
 
     # build the WIDS descriptor
     shard_name = f"{embedding_type.value}-%06d.tar"
@@ -118,10 +120,9 @@ async def get_items_in_cluster(
     """Return object indices to build a cluster specific webdataset shard."""
 
     cluster_offsets = await (
-        read_centroids(embedding_type)
-        .lazy()
+        scan(embedding_type, "centroids")
         .select(
-            pl.col("nsamples").shift(1).fill_null(0).cum_sum().alias("offset"),
+            pl.col("nsamples").shift(1, fill_value=0).cum_sum().alias("offset"),
             pl.col("nsamples").alias("length"),
         )
         .slice(cluster, 1)
@@ -129,7 +130,7 @@ async def get_items_in_cluster(
     cluster_offset, cluster_length = cluster_offsets.row(0)
 
     items = await (
-        scan_clusters(embedding_type)
+        scan(embedding_type, "clusters")
         .select(pl.col("url"), pl.col("offset"), pl.col("length"))
         .slice(cluster_offset, cluster_length)
     ).collect_async()
