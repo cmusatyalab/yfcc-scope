@@ -9,7 +9,7 @@ from typing import Annotated, TypeVar
 import numpy as np
 import requests
 from annotated_types import Len
-from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (
     JSONResponse,
     Response,
@@ -26,6 +26,7 @@ from ..db import (
 )
 from ..embedding import ClipModel
 from ..log import log
+from ..scope.app import image_url
 from ..scope.slicer import get_image_by_id
 from ..settings import SCOPE_BASE
 from ..utils import (
@@ -48,19 +49,20 @@ def _compute_clip_query(is_text, source, limit, search_fn):
     return feat, embedding_list, rows
 
 
-def _do_clip_query(is_text, source, limit):
+def _do_clip_query(request: Request, is_text, source, limit):
     _, embedding_list, rows = _compute_clip_query(
         is_text, source, limit, search_clip_images
     )
     out_rows = [
-        build_vector_row(image_file_id, path, 0, None) for image_file_id, path in rows
+        build_vector_row(image_file_id, image_url(request, image_file_id), 0, None)
+        for image_file_id, _ in rows
     ]
-
     return {"embedding": embedding_list, "rows": out_rows}
 
 
 @router.post("/clip_text_query")
 def clip_text_query(
+    request: Request,
     text: Annotated[str, Body()],
     limit: Annotated[int, Body(ge=1, le=1000)] = 20,
 ):
@@ -69,11 +71,12 @@ def clip_text_query(
         raise HTTPException(status_code=400, detail={"error": "text is required"})
 
     log.info("clip_text_query received text: %s, limit: %d", text, limit)
-    return _do_clip_query(True, text, limit)
+    return _do_clip_query(request, True, text, limit)
 
 
 @router.post("/clip_image_query")
 def clip_image_query(
+    request: Request,
     image: Annotated[UploadFile, File()],
     limit: Annotated[int, Form(ge=1, le=1000)] = 20,
 ):
@@ -84,11 +87,11 @@ def clip_image_query(
         len(image_bytes),
         limit,
     )
-    return _do_clip_query(False, image_bytes, limit)
+    return _do_clip_query(request, False, image_bytes, limit)
 
 
 @router.post("/run_query")
-def run_query(sql: Annotated[str, Body()]):
+def run_query(request: Request, sql: Annotated[str, Body()]):
     try:
         raw_sql = validate_sql(sql)
     except ValueError as e:
@@ -105,7 +108,9 @@ def run_query(sql: Annotated[str, Body()]):
         ) from None
 
     out_rows = [
-        build_vector_row(image_file_id, path, total_bboxes, counts_json)
+        build_vector_row(
+            image_file_id, image_url(request, image_file_id), total_bboxes, counts_json
+        )
         for image_file_id, path, total_bboxes, counts_json in rows
     ]
     log.info("run_query returned %d rows", len(out_rows))
