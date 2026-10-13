@@ -8,16 +8,19 @@ import threading
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import numpy as np
 import torch
+from fastapi import APIRouter, Depends, File, UploadFile
 from PIL import Image
 
 from .settings import DINOV3_REPO_DIR
-from .types import EmbeddingType
+from .types import Embeddings, EmbeddingType
 
 _device = "cuda" if torch.cuda.is_available() else "cpu"
+
+router = APIRouter()
 
 
 def _autocast_context():
@@ -131,3 +134,16 @@ def image_model(embedding_type: EmbeddingType) -> LazyModel:
     if embedding_type.name.startswith("dinov3"):
         return DINOv3Model()
     return ClipModel()
+
+
+@router.post("/{embedding_type}", tags=["embedding"], response_model=Embeddings)
+def embed(
+    model: Annotated[LazyModel, Depends(image_model)],
+    images: Annotated[list[UploadFile], File()],
+) -> dict[str, list[list[float]]]:
+    embeddings = [
+        model.image_features(image.file.read())[0]
+        for image in images
+        if (image.content_type or "").startswith("image/")
+    ]
+    return {"embeddings": embeddings}
